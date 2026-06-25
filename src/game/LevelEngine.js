@@ -1,0 +1,102 @@
+const DiffHitTester = require('./DiffHitTester.js');
+
+const STATE = { READY: 'ready', PLAYING: 'playing', CLEAR: 'clear', FAIL: 'fail' };
+
+class LevelEngine {
+  constructor({ levelConfig, imageA, imageB, viewport, hooks = {} }) {
+    this.config = levelConfig;
+    this.imageA = imageA;
+    this.imageB = imageB;
+    this.viewport = viewport;
+    this.hooks = hooks;
+    this.state = STATE.READY;
+    this.found = new Set();
+    this.misses = 0;
+    this.elapsed = 0;
+    this.lastMissAt = -1;
+    this.layout = this.computeLayout();
+    this.hitTester = new DiffHitTester(this.layout);
+  }
+
+  computeLayout() {
+    const { viewport, config } = this;
+    const margin = 12;
+    const isVertical = (config.layout || 'vertical') === 'vertical';
+    const aspect = config.imageSize.w / config.imageSize.h;
+    let aRect, bRect;
+    if (isVertical) {
+      const w = viewport.w - margin * 2;
+      const h = w / aspect;
+      const totalH = h * 2 + margin;
+      const top = viewport.y + (viewport.h - totalH) / 2;
+      aRect = { x: viewport.x + margin, y: top, w, h };
+      bRect = { x: viewport.x + margin, y: top + h + margin, w, h };
+    } else {
+      const h = viewport.h - margin * 2;
+      const w = h * aspect;
+      const totalW = w * 2 + margin;
+      const left = viewport.x + (viewport.w - totalW) / 2;
+      aRect = { x: left, y: viewport.y + margin, w, h };
+      bRect = { x: left + w + margin, y: viewport.y + margin, w, h };
+    }
+    return { aRect, bRect, imageSize: config.imageSize };
+  }
+
+  start() {
+    this.state = STATE.PLAYING;
+    this.elapsed = 0;
+  }
+
+  update(dt) {
+    if (this.state !== STATE.PLAYING) return;
+    this.elapsed += dt / 1000;
+    if (this.elapsed >= this.config.timeLimit) this.fail('timeout');
+  }
+
+  remainingTime() {
+    return Math.max(0, this.config.timeLimit - this.elapsed);
+  }
+
+  onTouch(x, y) {
+    if (this.state !== STATE.PLAYING) return;
+    const { onImage, localX, localY } = this.hitTester.toLocal(x, y);
+    if (!onImage) return;
+    const diff = this.hitTester.hitDiff(localX, localY, this.config.diffs, this.found);
+    if (diff) {
+      this.found.add(diff.id);
+      if (this.hooks.onDiffFound) this.hooks.onDiffFound(diff);
+      if (this.found.size >= this.config.diffs.length) this.clear();
+    } else {
+      this.misses += 1;
+      this.lastMissAt = this.elapsed;
+      if (this.hooks.onMiss) this.hooks.onMiss({ x, y, misses: this.misses });
+      if (this.misses >= (this.config.maxMisses || 3)) this.fail('misses');
+    }
+  }
+
+  useHint() {
+    if (this.state !== STATE.PLAYING) return null;
+    const remaining = this.config.diffs.filter((d) => !this.found.has(d.id));
+    if (!remaining.length) return null;
+    const d = remaining[Math.floor(Math.random() * remaining.length)];
+    if (this.hooks.onHint) this.hooks.onHint(d);
+    return d;
+  }
+
+  clear() {
+    this.state = STATE.CLEAR;
+    if (this.hooks.onClear) this.hooks.onClear({ time: this.elapsed, misses: this.misses });
+  }
+
+  fail(reason) {
+    this.state = STATE.FAIL;
+    if (this.hooks.onFail) this.hooks.onFail({ reason, time: this.elapsed, misses: this.misses });
+  }
+
+  getFoundDiffs() {
+    return this.config.diffs.filter((d) => this.found.has(d.id));
+  }
+}
+
+LevelEngine.STATE = STATE;
+module.exports = LevelEngine;
