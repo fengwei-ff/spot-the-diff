@@ -49,10 +49,9 @@ class ChapterScene {
     return { x: 8, y: safeTop + 6, w: 44, h: 36 };
   }
 
-  isUnlocked(index) {
-    if (index === 0) return true;
-    const prev = this.chapter.levels[index - 1];
-    return !!(this.progress[prev.levelId] && this.progress[prev.levelId].stars > 0);
+  isUnlocked() {
+    // 暂时全部解锁，后续再按进度加锁
+    return true;
   }
 
   async startLevel(level) {
