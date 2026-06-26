@@ -227,7 +227,7 @@ Import `/Users/a58/Desktop/找不同/miniGame` as a mini-program game project.
 
 - [ ] **Step 2: Launch the simulator and enter the level**
 
-Navigate to `南部档案馆 → 第一夜 · 南洋峇来`. Confirm the game loads without console errors.
+Navigate to `南部档案 → 第一夜 · 南洋峇来`. Confirm the game loads without console errors.
 
 - [ ] **Step 3: Inspect B image for obvious color patches**
 

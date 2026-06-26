@@ -7,6 +7,9 @@ class CanvasManager {
     this.height = env.screenHeight;
     this.safeTop = env.safeAreaTop || 0;
     this.safeBottom = env.safeAreaBottom || 0;
+    // 胶囊按钮区域：用于让各页标题与其纵向对齐
+    this.capsule = env.capsule || { top: 8, bottom: this.safeTop || 40, left: this.width - 95, right: this.width - 8, width: 87, height: 32 };
+    this.capsuleCenterY = (this.capsule.top + this.capsule.bottom) / 2;
     // 按设备像素比放大背景缓冲区，避免高清图在高 DPI 屏上被放大显示而发虚
     this.dpr = env.pixelRatio || 1;
     canvas.width = Math.round(this.width * this.dpr);

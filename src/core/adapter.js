@@ -5,9 +5,20 @@ function detect() {
     const info = wx.getSystemInfoSync();
     // 计算顶部安全区（避开胶囊按钮）
     let topInset = info.statusBarHeight || 20;
+    let capsule = null;
     try {
       const cap = wx.getMenuButtonBoundingClientRect && wx.getMenuButtonBoundingClientRect();
-      if (cap && cap.bottom) topInset = cap.bottom + 6;
+      if (cap && cap.bottom) {
+        topInset = cap.bottom + 6;
+        capsule = {
+          top: cap.top,
+          bottom: cap.bottom,
+          left: cap.left,
+          right: cap.right,
+          width: cap.width,
+          height: cap.height,
+        };
+      }
     } catch (e) { /* ignore */ }
     const sa = info.safeArea || { bottom: info.windowHeight };
     const bottomInset = Math.max(0, info.windowHeight - sa.bottom);
@@ -18,6 +29,7 @@ function detect() {
       pixelRatio: info.pixelRatio || 1,
       safeAreaTop: topInset,
       safeAreaBottom: bottomInset,
+      capsule,
       createCanvas: () => wx.createCanvas(),
       createOffscreenCanvas: (w, h) => {
         // 优先使用真正的离屏 canvas；小游戏里 wx.createCanvas() 拿到的是主屏 canvas，
@@ -82,6 +94,11 @@ function detect() {
     pixelRatio: (typeof window !== 'undefined' && window.devicePixelRatio) || 1,
     safeAreaTop: 0,
     safeAreaBottom: 0,
+    // 浏览器 demo 模拟一个胶囊位置，便于标题与其对齐
+    capsule: (() => {
+      const sw = canvasEl ? canvasEl.width : 750;
+      return { top: 12, bottom: 44, left: sw - 95, right: sw - 8, width: 87, height: 32 };
+    })(),
     createCanvas: () => canvasEl,
     createOffscreenCanvas: (w, h) => {
       const c = document.createElement('canvas');

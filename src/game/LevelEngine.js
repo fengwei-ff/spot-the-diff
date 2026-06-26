@@ -12,6 +12,8 @@ class LevelEngine {
     this.state = STATE.READY;
     this.found = new Set();
     this.misses = 0;
+    // 允许错误次数 = 差异点数量的 1/3（向下取整）
+    this.allowedMisses = Math.floor((levelConfig.diffs ? levelConfig.diffs.length : 0) / 3);
     this.elapsed = 0;
     this.lastMissAt = -1;
     this.layout = this.computeLayout();
@@ -70,7 +72,8 @@ class LevelEngine {
       this.misses += 1;
       this.lastMissAt = this.elapsed;
       if (this.hooks.onMiss) this.hooks.onMiss({ x, y, misses: this.misses });
-      if (this.misses >= (this.config.maxMisses || 3)) this.fail('misses');
+      // 红心为剩余可错次数，扣到 0 即游戏结束
+      if (this.misses >= this.allowedMisses) this.fail('misses');
     }
   }
 

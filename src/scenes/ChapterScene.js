@@ -20,9 +20,19 @@ class ChapterScene {
   }
 
   initLayout() {
-    const { width, height, safeTop, safeBottom } = this.canvasManager;
-    const introLines = this.chapter.chapterIntro ? this.chapter.chapterIntro.split('\n').length : 0;
-    this.headerH = safeTop + 56 + introLines * 18 + 22;
+    const { width, height, safeBottom, capsule } = this.canvasManager;
+    // 简介按内容宽度自动换行（与卡片左右边距一致），行距更舒展
+    this.introFontSize = 13;
+    this.introLineH = 20;
+    const introRaw = (this.chapter.chapterIntro || '').replace(/\s+/g, '');
+    const maxW = width - TILE_PADDING * 2;
+    const charsPerLine = Math.max(1, Math.floor(maxW / this.introFontSize));
+    this.introLines = [];
+    for (let i = 0; i < introRaw.length; i += charsPerLine) {
+      this.introLines.push(introRaw.slice(i, i + charsPerLine));
+    }
+    this.introTop = capsule.bottom + 12;
+    this.headerH = this.introTop + this.introLines.length * this.introLineH + 14;
     this.cols = 2;
     this.tileW = (width - TILE_PADDING * (this.cols + 1)) / this.cols;
     this.tileH = 130;
@@ -45,8 +55,8 @@ class ChapterScene {
   }
 
   backRect() {
-    const { safeTop } = this.canvasManager;
-    return { x: 8, y: safeTop + 6, w: 44, h: 36 };
+    const h = 36;
+    return { x: 8, y: this.canvasManager.capsuleCenterY - h / 2, w: 44, h };
   }
 
   isUnlocked() {
@@ -155,7 +165,7 @@ class ChapterScene {
   }
 
   render(ctx) {
-    const { width, height, safeTop } = this.canvasManager;
+    const { width, height, capsuleCenterY } = this.canvasManager;
     ctx.fillStyle = '#0b0b16';
     ctx.fillRect(0, 0, width, height);
 
@@ -187,16 +197,18 @@ class ChapterScene {
     ctx.lineTo(acx + 6, acy + 8);
     ctx.stroke();
 
+    const { capsule } = this.canvasManager;
     ctx.fillStyle = '#e6d8a8';
     ctx.font = 'bold 20px serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(this.chapter.chapterTitle, 56, safeTop + 12);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this.chapter.chapterTitle, (52 + capsule.left - 8) / 2, capsuleCenterY);
 
     ctx.fillStyle = '#9aa';
-    ctx.font = '12px sans-serif';
-    const lines = (this.chapter.chapterIntro || '').split('\n');
-    lines.forEach((s, i) => ctx.fillText(s, 56, safeTop + 40 + i * 18));
+    ctx.font = `${this.introFontSize}px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    this.introLines.forEach((s, i) => ctx.fillText(s, TILE_PADDING, this.introTop + i * this.introLineH));
   }
 
   drawTile(ctx, t, ty) {

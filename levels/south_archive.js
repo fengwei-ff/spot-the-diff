@@ -8,14 +8,14 @@ const H = 540;
 
 module.exports = {
   chapterId: 'south_archive',
-  chapterTitle: '南部档案馆',
-  chapterIntro: '城南尽头那栋砖楼空了三十年。馆长失踪前留下一封信。\n你接过钥匙的那夜，雨没有停。',
+  chapterTitle: '南部档案',
+  chapterIntro: '故事设定在民国初立的特殊时期，主线围绕一名档案馆青年探员远赴南洋群岛，\n调查一系列诡异海域命案展开。',
   imageSize: { w: W, h: H },
   levels: [
     {
       levelId: 'archive_01',
-      title: '第一夜 · 南洋峇来',
-      story: '宴席灯火未熄，他站在门口，目光落在你身上。',
+      title: '第一关 · 南洋峇来',
+      story: '峇来举行了一场传统的南洋婚礼，新娘陪嫁中暗藏着一尊会发声的“峇来神像”（及蛇形泥雕）。婚后不久，新郎全家离奇惨死在盐碱湖畔，死状呈现出疯狂挖掘湖床的诡异姿态。',
       painterId: 'archive_01',
       imageA: 'levels/images/archive_01.jpeg',
       imageB: 'levels/images/archive_01_comparison.jpeg',
@@ -32,7 +32,7 @@ module.exports = {
     },
     {
       levelId: 'archive_02',
-      title: '第二夜 · 长廊',
+      title: '第二关 · 长廊',
       story: '走廊尽头有人影一闪。你确认过钥匙是你这把。',
       painterId: 'archive_02',
       imageA: 'levels/images/archive_02.jpg',
@@ -51,7 +51,7 @@ module.exports = {
     },
     // {
     //   levelId: 'archive_03',
-    //   title: '第三夜 · 档案室',
+    //   title: '第三关 · 档案室',
     //   story: '台灯亮着，像是有人刚走。',
     //   painterId: 'archive_03',
     //   imageA: '',
@@ -69,7 +69,7 @@ module.exports = {
     // },
     // {
     //   levelId: 'archive_04',
-    //   title: '第四夜 · 楼梯井',
+    //   title: '第四关 · 楼梯井',
     //   story: '台阶底端的光不是你点的。',
     //   painterId: 'archive_04',
     //   imageA: '',
@@ -87,7 +87,7 @@ module.exports = {
     // },
     // {
     //   levelId: 'archive_05',
-    //   title: '第五夜 · 馆长办公室',
+    //   title: '第五关 · 馆长办公室',
     //   story: '钢笔还沾着墨。他到底何时离开？',
     //   painterId: 'archive_05',
     //   imageA: '',
@@ -106,7 +106,7 @@ module.exports = {
     // },
     // {
     //   levelId: 'archive_06',
-    //   title: '第六夜 · 阅览室',
+    //   title: '第六关 · 阅览室',
     //   story: '空椅子排得整齐，唯有一盏灯灭了。',
     //   painterId: 'archive_06',
     //   imageA: '',
@@ -124,7 +124,7 @@ module.exports = {
     // },
     // {
     //   levelId: 'archive_07',
-    //   title: '第七夜 · 储藏间',
+    //   title: '第七关 · 储藏间',
     //   story: '木箱钉牢。最里那只，钉了三遍。',
     //   painterId: 'archive_07',
     //   imageA: '',
@@ -142,7 +142,7 @@ module.exports = {
     // },
     // {
     //   levelId: 'archive_08',
-    //   title: '第八夜 · 雨中屋顶',
+    //   title: '第八关 · 雨中屋顶',
     //   story: '雨砸下来。对面屋脊的人没动。',
     //   painterId: 'archive_08',
     //   imageA: '',
@@ -160,7 +160,7 @@ module.exports = {
     // },
     // {
     //   levelId: 'archive_09',
-    //   title: '第九夜 · 钟楼',
+    //   title: '第九关 · 钟楼',
     //   story: '钟停在十一点四十。馆长信里写过这个时间。',
     //   painterId: 'archive_09',
     //   imageA: '',
@@ -179,7 +179,7 @@ module.exports = {
     // },
     // {
     //   levelId: 'archive_10',
-    //   title: '第十夜 · 密室',
+    //   title: '第十关 · 密室',
     //   story: '钥匙第二齿对应的门。书摊开在最后一页。',
     //   painterId: 'archive_10',
     //   imageA: '',

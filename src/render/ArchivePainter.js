@@ -133,7 +133,7 @@ function scene01(ctx, w, h, seed) {
   ctx.fillStyle = '#c8b074';
   ctx.font = 'bold 16px serif';
   ctx.textAlign = 'center';
-  ctx.fillText('南部档案馆', w / 2, 56);
+  ctx.fillText('南部档案', w / 2, 56);
   // 壁灯
   lamp(ctx, 120, 140, true);
   lamp(ctx, w - 120, 140, true);

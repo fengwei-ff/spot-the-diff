@@ -2,10 +2,34 @@
   "description": "剧迷找不同 MVP",
   "packOptions": {
     "ignore": [
-      { "type": "file", "value": "build-demo.js" },
-      { "type": "file", "value": "demo-bundle.js" },
-      { "type": "file", "value": "demo.html" },
-      { "type": "file", "value": "README.md" }
+      {
+        "value": ".git",
+        "type": "folder"
+      },
+      {
+        "value": "node_modules",
+        "type": "folder"
+      },
+      {
+        "value": "docs",
+        "type": "folder"
+      },
+      {
+        "value": "build-demo.js",
+        "type": "file"
+      },
+      {
+        "value": "demo-bundle.js",
+        "type": "file"
+      },
+      {
+        "value": "demo.html",
+        "type": "file"
+      },
+      {
+        "value": "README.md",
+        "type": "file"
+      }
     ],
     "include": []
   },

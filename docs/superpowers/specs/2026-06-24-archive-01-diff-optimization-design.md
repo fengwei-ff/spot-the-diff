@@ -37,7 +37,7 @@ All differences use radii between 10 and 26, with `hitR` between 28 and 38 to ke
 ## Verification
 
 - Build and run the WeChat mini-program.
-- Enter `南部档案馆 → 第一夜`.
+- Enter `南部档案 → 第一夜`.
 - Confirm that B-side differences are subtle and no longer look like large colored overlays.
 - Confirm all 5 differences are on the character.
 - Confirm all 5 differences can be tapped and registered correctly.
