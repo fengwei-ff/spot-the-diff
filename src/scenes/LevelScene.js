@@ -42,6 +42,8 @@ class LevelScene {
     this.hintTarget = null;
     this.hintUntil = 0;
     this.hintUsed = 0;
+    this.hintQuota = 1; // 每关默认 1 次提示，用完需看广告获取
+    this.adModal = false;
     this.debugTaps = [];
     this.coordToast = null;
 
@@ -132,6 +134,11 @@ class LevelScene {
 
   onTouch({ x, y }) {
     const { capsule } = this.canvasManager;
+    // 广告弹窗打开时，优先处理弹窗交互
+    if (this.adModal) {
+      this.handleAdTouch(x, y);
+      return;
+    }
     // 返回按钮：与胶囊对齐的左上角点击区
     if (x < 48 && y >= capsule.top - 6 && y <= capsule.bottom + 10) {
       if (this.onFinish) this.onFinish({ result: 'abort', stars: 0, time: this.engine.elapsed, misses: this.engine.misses, hintUsed: this.hintUsed });
@@ -139,8 +146,16 @@ class LevelScene {
     }
     const btn = this.hintButtonRect();
     if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
-      const used = this.engine.useHint();
-      if (used) this.hintUsed += 1;
+      if (this.hintQuota > 0) {
+        const used = this.engine.useHint();
+        if (used) {
+          this.hintQuota -= 1;
+          this.hintUsed += 1;
+        }
+      } else {
+        // 提示次数用完：弹出广告弹窗（占位）
+        this.adModal = true;
+      }
       return;
     }
     if (this.config.debugCoords) {
@@ -176,6 +191,87 @@ class LevelScene {
     this.renderHint(ctx);
     this.renderToasts(ctx);
     this.renderFooter(ctx);
+    if (this.adModal) this.renderAdModal(ctx);
+  }
+
+  adModalRects() {
+    const { width, height } = this.canvasManager;
+    const w = Math.min(300, width - 48);
+    const h = 190;
+    const x = (width - w) / 2;
+    const y = (height - h) / 2;
+    return {
+      box: { x, y, w, h },
+      watch: { x: x + 24, y: y + h - 58, w: w - 48, h: 42 },
+      close: { x: x + w - 36, y: y + 12, w: 26, h: 26 },
+    };
+  }
+
+  handleAdTouch(x, y) {
+    const { watch, close, box } = this.adModalRects();
+    const hit = (r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+    if (hit(close)) {
+      this.adModal = false;
+      return;
+    }
+    if (hit(watch)) {
+      // TODO: 接入微信激励视频广告 wx.createRewardedVideoAd，播放完成后再发放
+      this.grantHintByAd();
+      this.adModal = false;
+      return;
+    }
+    // 点击弹窗外的遮罩关闭
+    const inBox = x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h;
+    if (!inBox) this.adModal = false;
+  }
+
+  grantHintByAd() {
+    // 占位：观看广告后获得 1 次提示机会
+    this.hintQuota += 1;
+  }
+
+  renderAdModal(ctx) {
+    const { width, height } = this.canvasManager;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, width, height);
+
+    const { box, watch, close } = this.adModalRects();
+    ctx.fillStyle = '#20203a';
+    roundRectPath(ctx, box.x, box.y, box.w, box.h, 16);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,209,102,0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // 关闭按钮
+    ctx.strokeStyle = '#9aa';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(close.x + 7, close.y + 7); ctx.lineTo(close.x + close.w - 7, close.y + close.h - 7);
+    ctx.moveTo(close.x + close.w - 7, close.y + 7); ctx.lineTo(close.x + 7, close.y + close.h - 7);
+    ctx.stroke();
+
+    // 灯泡图标
+    this.drawHintIcon(ctx, box.x + box.w / 2, box.y + 46, 13);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 17px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('提示次数已用完', box.x + box.w / 2, box.y + 86);
+
+    ctx.fillStyle = '#aab';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('观看一段视频，获得 1 次提示机会', box.x + box.w / 2, box.y + 110);
+
+    // 观看按钮
+    ctx.fillStyle = '#ffd166';
+    roundRectPath(ctx, watch.x, watch.y, watch.w, watch.h, watch.h / 2);
+    ctx.fill();
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('观看视频 +1', watch.x + watch.w / 2, watch.y + watch.h / 2);
   }
 
   renderHeader(ctx) {
@@ -595,6 +691,23 @@ class LevelScene {
     const cx = btn.x + btn.w / 2;
     const iconCy = btn.y + btn.h * 0.4;
     this.drawHintIcon(ctx, cx, iconCy, 12);
+
+    // 提示次数用完时，灯泡右下角显示绿色「+」表示可看广告获取
+    if (this.hintQuota <= 0) {
+      const bx = cx + 13;
+      const by = iconCy + 11;
+      ctx.fillStyle = '#3ddc84';
+      ctx.beginPath();
+      ctx.arc(bx, by, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(bx - 3.5, by); ctx.lineTo(bx + 3.5, by);
+      ctx.moveTo(bx, by - 3.5); ctx.lineTo(bx, by + 3.5);
+      ctx.stroke();
+    }
   }
 
   drawHintIcon(ctx, cx, cy, r) {

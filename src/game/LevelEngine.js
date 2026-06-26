@@ -27,12 +27,16 @@ class LevelEngine {
     const aspect = config.imageSize.w / config.imageSize.h;
     let aRect, bRect;
     if (isVertical) {
-      const w = viewport.w - margin * 2;
+      // 同时受宽度与高度约束，避免两图总高超出可视区导致底部被裁
+      const maxW = viewport.w - margin * 2;
+      const maxH = (viewport.h - margin) / 2;
+      const w = Math.min(maxW, maxH * aspect);
       const h = w / aspect;
       const totalH = h * 2 + margin;
       const top = viewport.y + (viewport.h - totalH) / 2;
-      aRect = { x: viewport.x + margin, y: top, w, h };
-      bRect = { x: viewport.x + margin, y: top + h + margin, w, h };
+      const left = viewport.x + (viewport.w - w) / 2;
+      aRect = { x: left, y: top, w, h };
+      bRect = { x: left, y: top + h + margin, w, h };
     } else {
       const h = viewport.h - margin * 2;
       const w = h * aspect;
