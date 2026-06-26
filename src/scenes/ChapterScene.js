@@ -226,11 +226,11 @@ class ChapterScene {
     ctx.font = 'bold 26px serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText(`第${t.index + 1}夜`, t.x + 12, ty + 12);
+    ctx.fillText(`第${t.index + 1}关`, t.x + 12, ty + 12);
 
     ctx.fillStyle = unlocked ? '#e6d8a8' : '#444';
     ctx.font = 'bold 14px sans-serif';
-    const subTitle = (t.level.title || '').replace(/^第.+?夜 · /, '');
+    const subTitle = (t.level.title || '').replace(/^第.+?关 · /, '');
     ctx.fillText(subTitle, t.x + 12, ty + 50);
 
     if (!unlocked) {
