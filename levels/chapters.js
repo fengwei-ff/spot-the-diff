@@ -4,8 +4,8 @@ const southArchive = require('./south_archive.js');
 module.exports = [
   {
     id: 'south_archive',
-    title: '南部档案',
-    subtitle: '悬疑探案 · 10 关',
+    title: '难不挡案',
+    subtitle: '悬疑探案 · 6关',
     palette: ['#3a2a3a', '#1a1020'],
     accent: '#c8b074',
     available: true,

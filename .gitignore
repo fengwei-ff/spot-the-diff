@@ -26,3 +26,6 @@ debug/*.log
 # 日志与临时文件
 *.log
 *.tmp
+*.bak
+levels/images/_*.png
+levels/images/t_*.jpg

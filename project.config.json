@@ -29,6 +29,18 @@
       {
         "value": "README.md",
         "type": "file"
+      },
+      {
+        "value": "levels/images/_big.png",
+        "type": "file"
+      },
+      {
+        "value": "levels/images/_crop.png",
+        "type": "file"
+      },
+      {
+        "value": "archive_06_diff.jpeg.bak",
+        "type": "file"
       }
     ],
     "include": []
