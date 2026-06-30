@@ -15,6 +15,10 @@
         "type": "folder"
       },
       {
+        "value": "images",
+        "type": "folder"
+      },
+      {
         "value": "build-demo.js",
         "type": "file"
       },
@@ -73,7 +77,7 @@
   },
   "compileType": "game",
   "libVersion": "2.30.0",
-  "appid": "wx43f71d63e2f937ab",
+  "appid": "wx0b1fc2860c73147d",
   "projectname": "spot-the-difference",
   "condition": {},
   "editorSetting": {
