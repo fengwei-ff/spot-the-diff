@@ -1,9 +1,11 @@
 const LevelEngine = require('../game/LevelEngine.js');
 const DiffPainter = require('../render/DiffPainter.js');
 const ResultScene = require('./ResultScene.js');
+const { BODY_FONT_SIZE, BODY_LINE_HEIGHT, wrapText, clampLines, drawBodyLines, getLevelSubtitle } = require('../render/TextHelper.js');
 
 const HEADER_BASE = 98;
 const FOOTER_H = 80;
+const STORY_MAX_LINES = 1;
 
 // 找到差异后的圈：呼吸闪烁动画时长与脉动次数
 const FOUND_ANIM_MS = 1500;
@@ -47,8 +49,18 @@ class LevelScene {
     this.debugTaps = [];
     this.coordToast = null;
 
-    const { width, height, safeTop, safeBottom } = canvasManager;
-    this.headerH = safeTop + HEADER_BASE;
+    const { width, height, safeTop, safeBottom, capsule, ctx } = canvasManager;
+    this.storyFontSize = BODY_FONT_SIZE;
+    this.storyLineH = BODY_LINE_HEIGHT;
+    const storyMaxW = width - 32;
+    const storyWrapped = wrapText(ctx, this.config.story || '', storyMaxW, this.storyFontSize);
+    this.storyLines = clampLines(ctx, storyWrapped, STORY_MAX_LINES, storyMaxW, this.storyFontSize);
+    this.storyTop = capsule.bottom + 14;
+    // 固定剧情区高度，避免长文案关卡头部更高、图片区变小
+    const storyBlockH = STORY_MAX_LINES * this.storyLineH + 4;
+    this.pillsCy = this.storyTop + storyBlockH + 18;
+    this.starsCy = this.pillsCy + 30;
+    this.headerH = Math.max(safeTop + HEADER_BASE, this.starsCy + 14);
     this.footerH = FOOTER_H + safeBottom;
     const viewport = { x: 0, y: this.headerH, w: width, h: height - this.headerH - this.footerH };
 
@@ -275,7 +287,7 @@ class LevelScene {
   }
 
   renderHeader(ctx) {
-    const { width, capsule, capsuleCenterY } = this.canvasManager;
+    const { width, capsuleCenterY } = this.canvasManager;
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, width, this.headerH);
 
@@ -290,25 +302,21 @@ class LevelScene {
     ctx.lineTo(bx + 6, by + 8);
     ctx.stroke();
 
-    // 标题：在返回键与胶囊之间的导航区内水平居中，纵向与胶囊对齐
-    const regionLeft = 52;
-    const regionRight = capsule.left - 8;
-    const titleCenterX = (regionLeft + regionRight) / 2;
+    // 标题：屏幕水平居中（对齐刘海屏），纵向与胶囊对齐
+    const nav = this.canvasManager.getNavTitleLayout();
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 17px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const title = this.truncateText(ctx, this.config.title || '找不同', regionRight - regionLeft - 8);
-    ctx.fillText(title, titleCenterX, capsuleCenterY);
+    const title = this.truncateText(ctx, getLevelSubtitle(this.config.title) || '找不同', nav.maxWidth);
+    ctx.fillText(title, nav.centerX, capsuleCenterY);
 
-    // 标题下方描述（剧情简介）—— 与头部拉开间距
-    const descTop = capsule.bottom + 16;
-    if (this.config.story) {
-      ctx.font = '12px sans-serif';
-      ctx.fillStyle = '#8a8aa6';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText(this.truncateText(ctx, this.config.story, width - 32), 16, descTop);
+    // 标题下方剧情简介（支持多行换行）
+    if (this.storyLines.length) {
+      drawBodyLines(ctx, this.storyLines, 16, this.storyTop, {
+        fontSize: this.storyFontSize,
+        lineHeight: this.storyLineH,
+      });
     }
 
     const found = this.engine.found.size;
@@ -317,18 +325,16 @@ class LevelScene {
     const t = Math.ceil(this.engine.remainingTime());
 
     // 第一行：红心(剩余可错次数) + 倒计时 两个胶囊，居中
-    const pillsCy = descTop + 34;
-    this.drawStatPills(ctx, width, pillsCy, `${remaining}`, this.formatTime(t), t <= 10);
+    this.drawStatPills(ctx, width, this.pillsCy, `${remaining}`, this.formatTime(t), t <= 10);
 
     // 第二行：五角星进度，从左至右排列（找到一处点亮一颗）
     const starR = 9;
     const starGap = starR * 2 + 8;
-    const starsCy = pillsCy + 34;
     const startX = 16 + starR;
     for (let i = 0; i < total; i++) {
       const lit = i < found;
       ctx.fillStyle = lit ? '#ffd166' : '#3a3a4a';
-      this.drawStar(ctx, startX + i * starGap, starsCy, starR);
+      this.drawStar(ctx, startX + i * starGap, this.starsCy, starR);
       if (lit) {
         ctx.strokeStyle = 'rgba(255,209,102,0.5)';
         ctx.lineWidth = 1;

@@ -76,7 +76,7 @@
     }
   },
   "compileType": "game",
-  "libVersion": "2.30.0",
+  "libVersion": "3.16.2",
   "appid": "wx0b1fc2860c73147d",
   "projectname": "spot-the-difference",
   "condition": {},

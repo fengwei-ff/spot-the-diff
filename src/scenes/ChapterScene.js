@@ -1,6 +1,7 @@
 const ArchivePainter = require('../render/ArchivePainter.js');
 const ImageLoader = require('../render/ImageLoader.js');
 const ScrollController = require('../core/ScrollController.js');
+const { BODY_FONT_SIZE, BODY_LINE_HEIGHT, wrapText, drawBodyLines, getLevelSubtitle } = require('../render/TextHelper.js');
 const LevelScene = require('./LevelScene.js');
 
 const TILE_PADDING = 12;
@@ -20,17 +21,11 @@ class ChapterScene {
   }
 
   initLayout() {
-    const { width, height, safeBottom, capsule } = this.canvasManager;
-    // 简介按内容宽度自动换行（与卡片左右边距一致），行距更舒展
-    this.introFontSize = 13;
-    this.introLineH = 20;
-    const introRaw = (this.chapter.chapterIntro || '').replace(/\s+/g, '');
+    const { width, height, safeBottom, capsule, ctx } = this.canvasManager;
+    this.introFontSize = BODY_FONT_SIZE;
+    this.introLineH = BODY_LINE_HEIGHT;
     const maxW = width - TILE_PADDING * 2;
-    const charsPerLine = Math.max(1, Math.floor(maxW / this.introFontSize));
-    this.introLines = [];
-    for (let i = 0; i < introRaw.length; i += charsPerLine) {
-      this.introLines.push(introRaw.slice(i, i + charsPerLine));
-    }
+    this.introLines = wrapText(ctx, (this.chapter.chapterIntro || ''), maxW, this.introFontSize);
     this.introTop = capsule.bottom + 12;
     this.headerH = this.introTop + this.introLines.length * this.introLineH + 14;
     this.cols = 2;
@@ -125,6 +120,14 @@ class ChapterScene {
     return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
   }
 
+  truncateNavTitle(ctx, text, maxWidth) {
+    if (!text) return '';
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let s = text;
+    while (s.length > 1 && ctx.measureText(`${s}…`).width > maxWidth) s = s.slice(0, -1);
+    return s + '…';
+  }
+
   onTouchStart({ x, y }) {
     this._tapX = x;
     this._tapY = y;
@@ -165,7 +168,7 @@ class ChapterScene {
   }
 
   render(ctx) {
-    const { width, height, capsuleCenterY } = this.canvasManager;
+    const { width, height, capsuleCenterY, navTitleCenterX } = this.canvasManager;
     ctx.fillStyle = '#0b0b16';
     ctx.fillRect(0, 0, width, height);
 
@@ -197,18 +200,18 @@ class ChapterScene {
     ctx.lineTo(acx + 6, acy + 8);
     ctx.stroke();
 
-    const { capsule } = this.canvasManager;
+    const nav = this.canvasManager.getNavTitleLayout();
     ctx.fillStyle = '#e6d8a8';
     ctx.font = 'bold 20px serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(this.chapter.chapterTitle, (52 + capsule.left - 8) / 2, capsuleCenterY);
+    const chapterTitle = this.truncateNavTitle(ctx, this.chapter.chapterTitle, nav.maxWidth);
+    ctx.fillText(chapterTitle, navTitleCenterX, capsuleCenterY);
 
-    ctx.fillStyle = '#9aa';
-    ctx.font = `${this.introFontSize}px sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    this.introLines.forEach((s, i) => ctx.fillText(s, TILE_PADDING, this.introTop + i * this.introLineH));
+    drawBodyLines(ctx, this.introLines, TILE_PADDING, this.introTop, {
+      fontSize: this.introFontSize,
+      lineHeight: this.introLineH,
+    });
   }
 
   drawTile(ctx, t, ty) {
@@ -230,7 +233,7 @@ class ChapterScene {
 
     ctx.fillStyle = unlocked ? '#e6d8a8' : '#444';
     ctx.font = 'bold 14px sans-serif';
-    const subTitle = (t.level.title || '').replace(/^第.+?关 · /, '');
+    const subTitle = getLevelSubtitle(t.level.title);
     ctx.fillText(subTitle, t.x + 12, ty + 50);
 
     if (!unlocked) {

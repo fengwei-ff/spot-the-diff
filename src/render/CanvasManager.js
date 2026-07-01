@@ -10,6 +10,8 @@ class CanvasManager {
     // 胶囊按钮区域：用于让各页标题与其纵向对齐
     this.capsule = env.capsule || { top: 8, bottom: this.safeTop || 40, left: this.width - 95, right: this.width - 8, width: 87, height: 32 };
     this.capsuleCenterY = (this.capsule.top + this.capsule.bottom) / 2;
+    // 导航栏标题：相对屏幕水平居中（对齐刘海屏视觉中心）
+    this.navTitleCenterX = this.width / 2;
     // 按设备像素比放大背景缓冲区，避免高清图在高 DPI 屏上被放大显示而发虚
     this.dpr = env.pixelRatio || 1;
     canvas.width = Math.round(this.width * this.dpr);
@@ -27,6 +29,20 @@ class CanvasManager {
     // 每帧重置变换，保证基准缩放始终生效
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.clearRect(0, 0, this.width, this.height);
+  }
+
+  /** 导航栏标题布局：屏幕居中，宽度避开左右按钮区 */
+  getNavTitleLayout(sideInset = 52) {
+    const centerX = this.navTitleCenterX;
+    const maxWidth = 2 * Math.min(
+      centerX - sideInset,
+      (this.capsule.left - 8) - centerX,
+    );
+    return {
+      centerX,
+      centerY: this.capsuleCenterY,
+      maxWidth: Math.max(80, maxWidth),
+    };
   }
 }
 
