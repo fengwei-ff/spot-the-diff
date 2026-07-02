@@ -1,4 +1,5 @@
-const HomeScene = require('./HomeScene.js');
+const SplashScene = require('./SplashScene.js');
+const { drawPageBackground } = require('../render/SceneBackground.js');
 
 class BootScene {
   constructor({ sceneManager, canvasManager, env }) {
@@ -12,7 +13,7 @@ class BootScene {
 
   start() {
     try {
-      this.sceneManager.replace(new HomeScene({
+      this.sceneManager.replace(new SplashScene({
         sceneManager: this.sceneManager,
         canvasManager: this.canvasManager,
         env: this.env,
@@ -27,15 +28,14 @@ class BootScene {
 
   render(ctx) {
     const { width, height } = this.canvasManager;
-    ctx.fillStyle = '#0b0b16';
-    ctx.fillRect(0, 0, width, height);
-    ctx.fillStyle = '#e6d8a8';
-    ctx.font = 'bold 22px serif';
+    drawPageBackground(ctx, width, height);
+    ctx.fillStyle = '#ff6b6b';
+    ctx.font = 'bold 22px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('剧迷找不同', width / 2, height / 2 - 20);
     ctx.font = '13px sans-serif';
-    ctx.fillStyle = this.error ? '#ff6b6b' : '#9aa';
+    ctx.fillStyle = this.error ? '#ff6b6b' : '#7a8a9a';
     ctx.fillText(this.status, width / 2, height / 2 + 14);
   }
 }

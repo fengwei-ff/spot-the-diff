@@ -5,5 +5,10 @@
     "request": 10000,
     "downloadFile": 30000
   },
-  "subpackages": []
+  "subpackages": [
+    {
+      "name": "levelImages",
+      "root": "levels/images"
+    }
+  ]
 }

@@ -29,3 +29,5 @@ debug/*.log
 *.bak
 levels/images/_*.png
 levels/images/t_*.jpg
+assets/audio/*.wav
+scripts/.tmp/

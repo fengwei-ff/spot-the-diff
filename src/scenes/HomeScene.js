@@ -1,19 +1,26 @@
 const chapters = require('../../levels/chapters.js');
 const ScrollController = require('../core/ScrollController.js');
 const ChapterScene = require('./ChapterScene.js');
+const AudioManager = require('../audio/AudioManager.js');
+const { drawPageBackground, drawHeaderBand } = require('../render/SceneBackground.js');
 
 const PADDING = 16;
 const FOOTER_GAP = 24;
+const SETTINGS_BTN_SIZE = 32;
+const CAPSULE_BOTTOM_GAP = 14;
 
 class HomeScene {
-  constructor({ sceneManager, canvasManager, env, progress = {} }) {
+  constructor({ sceneManager, canvasManager, env, progress = {}, audio }) {
     this.sceneManager = sceneManager;
     this.canvasManager = canvasManager;
     this.env = env;
     this.progress = progress;
+    this.audio = audio || AudioManager.getInstance(env);
     this.chapters = chapters;
     this.toast = null;
     this.toastUntil = 0;
+    this.settingsModal = false;
+    this.bgPhase = 0;
     this.scroll = new ScrollController();
     this._tapX = null;
     this._tapY = null;
@@ -21,10 +28,11 @@ class HomeScene {
   }
 
   initLayout() {
-    const { width, height, safeBottom, capsuleCenterY } = this.canvasManager;
-    // 标题→飘带→副标题 紧凑排布，避免与卡片间留大空隙
-    this.subtitleY = capsuleCenterY + 50;
-    this.headerH = this.subtitleY + 2;
+    const { width, height, safeBottom, capsuleCenterY, capsule } = this.canvasManager;
+    // 设置按钮顶部与胶囊底部保持间距，副标题与按钮同一行
+    this.settingsRowTop = capsule.bottom + CAPSULE_BOTTOM_GAP;
+    this.subtitleY = this.settingsRowTop + SETTINGS_BTN_SIZE - 6;
+    this.headerH = this.settingsRowTop + SETTINGS_BTN_SIZE + 10;
     this.cardH = 160;
     this.cards = this.chapters.map((ch, i) => ({
       data: ch,
@@ -40,9 +48,62 @@ class HomeScene {
     this.scroll.setBounds(contentH, viewportH);
   }
 
+  settingsBtnRect() {
+    const { width } = this.canvasManager;
+    const cardRight = width - PADDING;
+    return {
+      x: cardRight - SETTINGS_BTN_SIZE,
+      y: this.settingsRowTop,
+      w: SETTINGS_BTN_SIZE,
+      h: SETTINGS_BTN_SIZE,
+    };
+  }
+
+  settingsModalRects() {
+    const { width, height } = this.canvasManager;
+    const boxW = Math.min(300, width - 48);
+    const boxH = 220;
+    const box = {
+      x: (width - boxW) / 2,
+      y: (height - boxH) / 2,
+      w: boxW,
+      h: boxH,
+    };
+    const rowH = 44;
+    const rowStartY = box.y + 56;
+    const toggleW = 48;
+    const toggleH = 26;
+    const rows = [
+      { key: 'bgm', label: '背景音乐', y: rowStartY },
+      { key: 'sfx', label: '音效', y: rowStartY + rowH },
+      { key: 'fx', label: '点击动效', y: rowStartY + rowH * 2 },
+    ].map((row) => ({
+      ...row,
+      toggle: {
+        x: box.x + box.w - 24 - toggleW,
+        y: row.y + (rowH - toggleH) / 2,
+        w: toggleW,
+        h: toggleH,
+        key: row.key,
+      },
+    }));
+    const close = {
+      x: box.x + box.w - 36,
+      y: box.y + 10,
+      w: 26,
+      h: 26,
+    };
+    return { box, rows, close };
+  }
+
+  hit(rect, x, y) {
+    return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+  }
+
   onTouchStart({ x, y }) {
     this._tapX = x;
     this._tapY = y;
+    if (this.settingsModal) return;
     if (y < this.headerH) return;
     this.scroll.onTouchStart(y);
   }
@@ -55,40 +116,75 @@ class HomeScene {
     const wasDragging = this.scroll.dragging;
     const isTap = this.scroll.isTap();
     this.scroll.onTouchEnd();
-    if (!wasDragging || !isTap) return;
-    const x = this._tapX, y = this._tapY;
+    const x = this._tapX;
+    const y = this._tapY;
     if (x == null || y == null) return;
+
+    if (this.settingsModal) {
+      this.handleSettingsTouch(x, y);
+      return;
+    }
+
+    if (this.hit(this.settingsBtnRect(), x, y)) {
+      this.audio.playSfx('tap');
+      this.settingsModal = true;
+      return;
+    }
+
+    if (!wasDragging || !isTap) return;
     const localY = y - this.headerH + this.scroll.scrollY;
     for (const c of this.cards) {
       if (x >= c.x && x <= c.x + c.w && localY >= c.y && localY <= c.y + c.h) {
         if (!c.data.available) {
+          this.audio.playSfx('tap');
           this.toast = '敬请期待';
           this.toastUntil = Date.now() + 1200;
           return;
         }
+        this.audio.playSfx('tap');
         this.sceneManager.push(new ChapterScene({
           sceneManager: this.sceneManager,
           canvasManager: this.canvasManager,
           env: this.env,
           progress: this.progress,
           chapter: c.data.data,
+          audio: this.audio,
         }));
         return;
       }
     }
   }
 
+  handleSettingsTouch(x, y) {
+    const { box, rows, close } = this.settingsModalRects();
+    if (this.hit(close, x, y)) {
+      this.audio.playSfx('tap');
+      this.settingsModal = false;
+      return;
+    }
+    const inBox = this.hit(box, x, y);
+    for (const row of rows) {
+      if (this.hit(row.toggle, x, y)) {
+        this.audio.playSfx('tap');
+        if (row.key === 'bgm') this.audio.setBgmEnabled(!this.audio.bgmEnabled);
+        else if (row.key === 'sfx') this.audio.setSfxEnabled(!this.audio.sfxEnabled);
+        else if (row.key === 'fx') this.audio.setFxEnabled(!this.audio.fxEnabled);
+        return;
+      }
+    }
+    if (!inBox) {
+      this.settingsModal = false;
+    }
+  }
+
   update(dt) {
+    this.bgPhase += dt * 0.004;
     this.scroll.update(dt);
   }
 
   render(ctx) {
     const { width, height } = this.canvasManager;
-    const bg = ctx.createLinearGradient(0, 0, 0, height);
-    bg.addColorStop(0, '#0d0d18');
-    bg.addColorStop(1, '#06060c');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, width, height);
+    drawPageBackground(ctx, width, height, { phase: this.bgPhase });
 
     ctx.save();
     ctx.beginPath();
@@ -102,18 +198,109 @@ class HomeScene {
     ctx.restore();
 
     const { capsuleCenterY } = this.canvasManager;
-    ctx.fillStyle = '#0d0d18';
-    ctx.fillRect(0, 0, width, this.headerH);
+    drawHeaderBand(ctx, 0, 0, width, this.headerH);
 
     this.drawBrand(ctx, capsuleCenterY);
 
-    ctx.fillStyle = '#9aa';
+    ctx.fillStyle = '#6a7a8a';
     ctx.font = '13px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
     ctx.fillText('选择今晚要打开的剧本', PADDING, this.subtitleY);
 
+    this.drawSettingsBtn(ctx);
+
+    if (this.settingsModal) this.renderSettingsModal(ctx);
     if (this.toast && Date.now() < this.toastUntil) this.drawToast(ctx, this.toast);
+  }
+
+  drawSettingsBtn(ctx) {
+    const btn = this.settingsBtnRect();
+    ctx.save();
+    this.roundRectPath(ctx, btn.x, btn.y, btn.w, btn.h, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(200,176,116,0.45)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    const cx = btn.x + btn.w / 2;
+    const cy = btn.y + btn.h / 2;
+    const r = 7;
+    ctx.strokeStyle = '#c8b074';
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const x1 = cx + Math.cos(angle) * (r - 2);
+      const y1 = cy + Math.sin(angle) * (r - 2);
+      const x2 = cx + Math.cos(angle) * (r + 3);
+      const y2 = cy + Math.sin(angle) * (r + 3);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  renderSettingsModal(ctx) {
+    const { width, height } = this.canvasManager;
+    const { box, rows, close } = this.settingsModalRects();
+
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, width, height);
+
+    this.roundRectPath(ctx, box.x, box.y, box.w, box.h, 10);
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fill();
+    ctx.strokeStyle = '#3a3a5a';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = '#e6d8a8';
+    ctx.font = 'bold 17px serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('设置', box.x + 20, box.y + 28);
+
+    ctx.strokeStyle = '#9aa';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(close.x + 6, close.y + 6);
+    ctx.lineTo(close.x + close.w - 6, close.y + close.h - 6);
+    ctx.moveTo(close.x + close.w - 6, close.y + 6);
+    ctx.lineTo(close.x + 6, close.y + close.h - 6);
+    ctx.stroke();
+
+    for (const row of rows) {
+      ctx.fillStyle = '#cdd';
+      ctx.font = '15px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(row.label, box.x + 20, row.y + 22);
+      const on = row.key === 'bgm' ? this.audio.bgmEnabled
+        : row.key === 'sfx' ? this.audio.sfxEnabled
+          : this.audio.fxEnabled;
+      this.drawToggle(ctx, row.toggle, on);
+    }
+  }
+
+  drawToggle(ctx, rect, on) {
+    const { x, y, w, h } = rect;
+    this.roundRectPath(ctx, x, y, w, h, h / 2);
+    ctx.fillStyle = on ? 'rgba(200,176,116,0.85)' : 'rgba(80,80,100,0.6)';
+    ctx.fill();
+
+    const knobR = h / 2 - 3;
+    const knobCx = on ? x + w - knobR - 3 : x + knobR + 3;
+    const knobCy = y + h / 2;
+    ctx.beginPath();
+    ctx.arc(knobCx, knobCy, knobR, 0, Math.PI * 2);
+    ctx.fillStyle = on ? '#1a1a2e' : '#ccc';
+    ctx.fill();
   }
 
   drawBrand(ctx, titleY) {
@@ -121,22 +308,22 @@ class HomeScene {
 
     // 标题：金色竖向渐变 + 深色描边与投影，质感更厚重
     ctx.save();
-    ctx.font = 'bold 18px "STKaiti", "KaiTi", serif';
+    ctx.font = 'bold 18px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     const titleW = ctx.measureText(title).width;
     const grad = ctx.createLinearGradient(0, titleY - 14, 0, titleY + 14);
-    grad.addColorStop(0, '#fbe8b6');
-    grad.addColorStop(0.5, '#ecca7c');
-    grad.addColorStop(1, '#c89a3e');
-    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    grad.addColorStop(0, '#ff8c42');
+    grad.addColorStop(0.5, '#ff6b6b');
+    grad.addColorStop(1, '#ee5a6f');
+    ctx.shadowColor = 'rgba(47,128,200,0.2)';
     ctx.shadowBlur = 4;
-    ctx.shadowOffsetY = 1.5;
+    ctx.shadowOffsetY = 1;
     ctx.fillStyle = grad;
     ctx.fillText(title, PADDING, titleY);
     ctx.shadowColor = 'transparent';
-    ctx.lineWidth = 0.6;
-    ctx.strokeStyle = 'rgba(90,62,18,0.5)';
+    ctx.lineWidth = 0;
+    ctx.strokeStyle = 'transparent';
     ctx.strokeText(title, PADDING, titleY);
     ctx.restore();
 
@@ -227,28 +414,39 @@ class HomeScene {
 
   drawCard(ctx, c, cy) {
     const ch = c.data;
+    const radius = 12;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(47,128,200,0.12)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+
     const g = ctx.createLinearGradient(c.x, cy, c.x, cy + c.h);
     g.addColorStop(0, ch.palette[0]);
     g.addColorStop(1, ch.palette[1]);
     ctx.fillStyle = g;
-    ctx.fillRect(c.x, cy, c.w, c.h);
+    this.roundRectPath(ctx, c.x, cy, c.w, c.h, radius);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.strokeStyle = ch.available ? `${ch.accent}55` : 'rgba(180,190,200,0.6)';
+    ctx.lineWidth = 1.5;
+    this.roundRectPath(ctx, c.x + 0.5, cy + 0.5, c.w - 1, c.h - 1, radius);
+    ctx.stroke();
 
     ctx.fillStyle = ch.accent;
-    ctx.globalAlpha = 0.85;
-    ctx.fillRect(c.x, cy, 6, c.h);
+    ctx.globalAlpha = ch.available ? 0.9 : 0.35;
+    this.roundRectPath(ctx, c.x, cy, 6, c.h, radius);
+    ctx.fill();
     ctx.globalAlpha = 1;
-
-    ctx.strokeStyle = ch.available ? ch.accent : '#3a3a4a';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(c.x + 0.5, cy + 0.5, c.w - 1, c.h - 1);
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillStyle = ch.available ? '#f0e6cf' : '#7a7a88';
-    ctx.font = 'bold 22px serif';
+    ctx.fillStyle = ch.available ? '#2f4a5f' : '#9aa8b5';
+    ctx.font = 'bold 22px sans-serif';
     ctx.fillText(ch.title, c.x + 24, cy + 22);
 
-    ctx.fillStyle = ch.available ? '#bcb29a' : '#5a5a68';
+    ctx.fillStyle = ch.available ? '#7a8a9a' : '#b0b8c0';
     ctx.font = '13px sans-serif';
     ctx.fillText(ch.subtitle, c.x + 24, cy + 56);
 
@@ -262,17 +460,19 @@ class HomeScene {
       const barX = c.x + 24;
       const barY = cy + c.h - 38;
       const barW = c.w - 48;
-      const barH = 4;
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.fillRect(barX, barY, barW, barH);
+      const barH = 6;
+      this.roundRectPath(ctx, barX, barY, barW, barH, 3);
+      ctx.fillStyle = 'rgba(90,170,230,0.18)';
+      ctx.fill();
+      this.roundRectPath(ctx, barX, barY, barW * (cleared / total), barH, 3);
       ctx.fillStyle = ch.accent;
-      ctx.fillRect(barX, barY, barW * (cleared / total), barH);
-      ctx.fillStyle = '#bcb29a';
+      ctx.fill();
+      ctx.fillStyle = '#7a8a9a';
       ctx.font = '12px sans-serif';
       ctx.textBaseline = 'top';
       ctx.fillText(`${cleared}/${total} 关  ${stars}⭐`, barX, barY + 10);
     } else {
-      ctx.fillStyle = '#5a5a68';
+      ctx.fillStyle = '#b0b8c0';
       ctx.font = '12px sans-serif';
       ctx.textBaseline = 'top';
       ctx.fillText('敬请期待', c.x + 24, cy + c.h - 28);
@@ -281,14 +481,17 @@ class HomeScene {
 
   drawToast(ctx, text) {
     const { width, height } = this.canvasManager;
-    const w = 160, h = 44;
+    const w = 160;
+    const h = 44;
     const x = width / 2 - w / 2;
     const y = height / 2 - h / 2;
-    ctx.fillStyle = 'rgba(20,20,32,0.92)';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = '#3a3a5a';
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    ctx.fillStyle = '#e6d8a8';
+    this.roundRectPath(ctx, x, y, w, h, 10);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(90,170,230,0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#5a6a7a';
     ctx.font = '15px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

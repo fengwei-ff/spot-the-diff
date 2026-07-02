@@ -1,6 +1,8 @@
 const LevelEngine = require('../game/LevelEngine.js');
 const DiffPainter = require('../render/DiffPainter.js');
 const ResultScene = require('./ResultScene.js');
+const AudioManager = require('../audio/AudioManager.js');
+const { drawNeutralBackground, drawPlayAreaBackground, drawHeaderBand } = require('../render/SceneBackground.js');
 const { BODY_FONT_SIZE, BODY_LINE_HEIGHT, wrapText, clampLines, drawBodyLines, getLevelSubtitle } = require('../render/TextHelper.js');
 
 const HEADER_BASE = 98;
@@ -29,7 +31,7 @@ function roundRectPath(ctx, x, y, w, h, r) {
 }
 
 class LevelScene {
-  constructor({ sceneManager, canvasManager, env, levelConfig, imageA, imageAForB, imageB, onFinish }) {
+  constructor({ sceneManager, canvasManager, env, levelConfig, imageA, imageAForB, imageB, onFinish, audio }) {
     this.sceneManager = sceneManager;
     this.canvasManager = canvasManager;
     this.env = env;
@@ -38,6 +40,7 @@ class LevelScene {
     this.imageAForB = imageAForB;
     this.imageB = imageB;
     this.onFinish = onFinish;
+    this.audio = audio || AudioManager.getInstance(env);
     this.toasts = [];
     this.foundAnims = {};
     this.flashUntil = 0;
@@ -80,6 +83,14 @@ class LevelScene {
     this.engine.start();
   }
 
+  onEnter() {
+    this.audio.enterLevel();
+  }
+
+  onExit() {
+    this.audio.leaveLevel();
+  }
+
   finish(result, time, misses, reason) {
     setTimeout(() => {
       this.sceneManager.push(new ResultScene({
@@ -92,6 +103,7 @@ class LevelScene {
         misses,
         hintUsed: this.hintUsed,
         reason,
+        audio: this.audio,
         onRetry: () => this.restart(),
         onBack: (stars) => {
           if (this.onFinish) this.onFinish({ result, stars, time, misses, hintUsed: this.hintUsed });
@@ -114,10 +126,13 @@ class LevelScene {
       imageAForB: this.imageAForB,
       imageB: this.imageB,
       onFinish: this.onFinish,
+      audio: this.audio,
     }));
   }
 
   flashFound(d) {
+    this.audio.playSfx('hit');
+    if (!this.audio.fxEnabled) return;
     this.flashUntil = Date.now() + 200;
     if (!d) return;
     // engine 在回调前已把 id 加入 found，size 即为本次找到的序号（1-based）
@@ -127,6 +142,8 @@ class LevelScene {
   }
 
   flashMiss(x, y) {
+    this.audio.playSfx('miss');
+    if (!this.audio.fxEnabled) return;
     const now = Date.now();
     this.toasts.push({ x, y, at: now, until: now + 700, type: 'miss' });
   }
@@ -153,6 +170,7 @@ class LevelScene {
     }
     // 返回按钮：与胶囊对齐的左上角点击区
     if (x < 48 && y >= capsule.top - 6 && y <= capsule.bottom + 10) {
+      this.audio.playSfx('tap');
       if (this.onFinish) this.onFinish({ result: 'abort', stars: 0, time: this.engine.elapsed, misses: this.engine.misses, hintUsed: this.hintUsed });
       return;
     }
@@ -163,6 +181,7 @@ class LevelScene {
         if (used) {
           this.hintQuota -= 1;
           this.hintUsed += 1;
+          this.audio.playSfx('hint');
         }
       } else {
         // 提示次数用完：弹出广告弹窗（占位）
@@ -193,10 +212,10 @@ class LevelScene {
 
   render(ctx) {
     const { width, height } = this.canvasManager;
-    ctx.fillStyle = '#0f0f1f';
-    ctx.fillRect(0, 0, width, height);
+    drawNeutralBackground(ctx, width, height);
 
     this.renderHeader(ctx);
+    drawPlayAreaBackground(ctx, 0, this.headerH, width, height - this.headerH - this.footerH);
     this.renderImages(ctx);
     this.renderFoundMarks(ctx);
     this.renderDebugOverlay(ctx);
@@ -288,11 +307,10 @@ class LevelScene {
 
   renderHeader(ctx) {
     const { width, capsuleCenterY } = this.canvasManager;
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, width, this.headerH);
+    drawHeaderBand(ctx, 0, 0, width, this.headerH);
 
     // 返回按钮（与胶囊纵向对齐）
-    ctx.strokeStyle = '#e6d8a8';
+    ctx.strokeStyle = '#4a90c8';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     const bx = 22, by = capsuleCenterY;
@@ -304,7 +322,7 @@ class LevelScene {
 
     // 标题：屏幕水平居中（对齐刘海屏），纵向与胶囊对齐
     const nav = this.canvasManager.getNavTitleLayout();
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = '#2f4a5f';
     ctx.font = 'bold 17px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -333,7 +351,7 @@ class LevelScene {
     const startX = 16 + starR;
     for (let i = 0; i < total; i++) {
       const lit = i < found;
-      ctx.fillStyle = lit ? '#ffd166' : '#3a3a4a';
+      ctx.fillStyle = lit ? '#ffd166' : '#c8d4e0';
       this.drawStar(ctx, startX + i * starGap, this.starsCy, starR);
       if (lit) {
         ctx.strokeStyle = 'rgba(255,209,102,0.5)';
@@ -451,6 +469,19 @@ class LevelScene {
   renderImages(ctx) {
     const { aRect, bRect, imageSize } = this.engine.layout;
     const { w, h } = imageSize;
+    const mat = 4;
+
+    const drawFrame = (rect) => {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(rect.x - mat, rect.y - mat, rect.w + mat * 2, rect.h + mat * 2);
+      ctx.strokeStyle = 'rgba(60,50,40,0.12)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rect.x - mat + 0.5, rect.y - mat + 0.5, rect.w + mat * 2 - 1, rect.h + mat * 2 - 1);
+    };
+
+    drawFrame(aRect);
+    drawFrame(bRect);
+
     this.drawLevelImage(ctx, this.imageA, aRect);
     if (this.imageB) {
       this.drawLevelImage(ctx, this.imageB, bRect);
@@ -468,11 +499,6 @@ class LevelScene {
     } else {
       DiffPainter.renderBPanel(ctx, this.imageA, aRect, bRect, imageSize, this.config.diffs);
     }
-    // 边框
-    ctx.strokeStyle = '#2a2a44';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(aRect.x, aRect.y, aRect.w, aRect.h);
-    ctx.strokeRect(bRect.x, bRect.y, bRect.w, bRect.h);
   }
 
   renderDebugOverlay(ctx) {
@@ -689,8 +715,7 @@ class LevelScene {
 
   renderFooter(ctx) {
     const { width, height } = this.canvasManager;
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, height - this.footerH, width, this.footerH);
+    drawHeaderBand(ctx, 0, height - this.footerH, width, this.footerH);
 
     // 底部居中的「提示」灯泡图标
     const btn = this.hintButtonRect();

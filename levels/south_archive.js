@@ -5,7 +5,7 @@ const H = 540;
 module.exports = {
   chapterId: 'south_archive',
   chapterTitle: '难不挡案',
-  chapterIntro: '故事设定在民国初立的特殊时期，主线围绕段家三兄妹作为侦探调查一系列诡异命案展开。',
+  chapterIntro: '故事设定在民国初立的特殊时期，主线围绕段家三兄妹作为侦探调查一系列诡异案件展开。',
   imageSize: { w: W, h: H },
   levels: [
     {

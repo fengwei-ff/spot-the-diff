@@ -3,20 +3,25 @@ const ImageLoader = require('../render/ImageLoader.js');
 const ScrollController = require('../core/ScrollController.js');
 const { BODY_FONT_SIZE, BODY_LINE_HEIGHT, wrapText, drawBodyLines, getLevelSubtitle } = require('../render/TextHelper.js');
 const LevelScene = require('./LevelScene.js');
+const AudioManager = require('../audio/AudioManager.js');
+const { drawPageBackground, drawHeaderBand } = require('../render/SceneBackground.js');
+const { ensureLevelImages } = require('../core/SubpackageLoader.js');
 
 const TILE_PADDING = 12;
 const FOOTER_GAP = 24;
 
 class ChapterScene {
-  constructor({ sceneManager, canvasManager, env, progress = {}, chapter }) {
+  constructor({ sceneManager, canvasManager, env, progress = {}, chapter, audio }) {
     this.sceneManager = sceneManager;
     this.canvasManager = canvasManager;
     this.env = env;
     this.chapter = chapter;
     this.progress = progress;
+    this.audio = audio || AudioManager.getInstance(env);
     this.scroll = new ScrollController();
     this._tapX = null;
     this._tapY = null;
+    this.bgPhase = 0;
     this.initLayout();
   }
 
@@ -60,6 +65,12 @@ class ChapterScene {
   }
 
   async startLevel(level) {
+    try {
+      await ensureLevelImages(this.env);
+    } catch (e) {
+      console.warn('[ChapterScene] 关卡图片分包加载失败:', e);
+    }
+
     const imageSize = level.imageSize || this.chapter.imageSize;
     let imageA;
     let imageAForB = null;
@@ -99,6 +110,7 @@ class ChapterScene {
       imageA,
       imageAForB,
       imageB,
+      audio: this.audio,
       onFinish: (result) => {
         this.onLevelFinish(level, result);
         while (this.sceneManager.current !== this) this.sceneManager.pop();
@@ -148,6 +160,7 @@ class ChapterScene {
     if (x == null || y == null) return;
     // 返回按钮不参与滚动，独立判定
     if (this.hit(this.backRect(), x, y)) {
+      this.audio.playSfx('tap');
       this.sceneManager.pop();
       return;
     }
@@ -157,6 +170,7 @@ class ChapterScene {
     for (const t of this.tiles) {
       if (x >= t.x && x <= t.x + t.w && localY >= t.y && localY <= t.y + t.h) {
         if (!this.isUnlocked(t.index)) return;
+        this.audio.playSfx('tap');
         this.startLevel({ ...t.level, index: t.index });
         return;
       }
@@ -164,13 +178,13 @@ class ChapterScene {
   }
 
   update(dt) {
+    this.bgPhase += dt * 0.004;
     this.scroll.update(dt);
   }
 
   render(ctx) {
     const { width, height, capsuleCenterY, navTitleCenterX } = this.canvasManager;
-    ctx.fillStyle = '#0b0b16';
-    ctx.fillRect(0, 0, width, height);
+    drawPageBackground(ctx, width, height, { phase: this.bgPhase });
 
     // 关卡格（裁剪在内容区内）
     ctx.save();
@@ -185,11 +199,10 @@ class ChapterScene {
     ctx.restore();
 
     // header（盖在最上）
-    ctx.fillStyle = '#15152a';
-    ctx.fillRect(0, 0, width, this.headerH);
+    drawHeaderBand(ctx, 0, 0, width, this.headerH);
 
     const br = this.backRect();
-    ctx.strokeStyle = '#e6d8a8';
+    ctx.strokeStyle = '#4a90c8';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -201,7 +214,7 @@ class ChapterScene {
     ctx.stroke();
 
     const nav = this.canvasManager.getNavTitleLayout();
-    ctx.fillStyle = '#e6d8a8';
+    ctx.fillStyle = '#2f80c8';
     ctx.font = 'bold 20px serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -219,19 +232,19 @@ class ChapterScene {
     const prog = this.progress[t.level.levelId];
     const stars = prog ? prog.stars : 0;
 
-    ctx.fillStyle = unlocked ? '#1f1f38' : '#15151f';
+    ctx.fillStyle = unlocked ? 'rgba(255,255,255,0.94)' : 'rgba(255,255,255,0.55)';
     ctx.fillRect(t.x, ty, t.w, t.h);
-    ctx.strokeStyle = unlocked ? '#3a3a5a' : '#222';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = unlocked ? 'rgba(90,170,230,0.45)' : 'rgba(180,190,200,0.5)';
+    ctx.lineWidth = 1.5;
     ctx.strokeRect(t.x + 0.5, ty + 0.5, t.w - 1, t.h - 1);
 
-    ctx.fillStyle = unlocked ? '#c8b074' : '#555';
+    ctx.fillStyle = unlocked ? '#ff8c42' : '#a0a8b0';
     ctx.font = 'bold 26px serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText(`第${t.index + 1}关`, t.x + 12, ty + 12);
 
-    ctx.fillStyle = unlocked ? '#e6d8a8' : '#444';
+    ctx.fillStyle = unlocked ? '#2f4a5f' : '#8a949e';
     ctx.font = 'bold 14px sans-serif';
     const subTitle = getLevelSubtitle(t.level.title);
     ctx.fillText(subTitle, t.x + 12, ty + 50);
@@ -246,12 +259,12 @@ class ChapterScene {
 
     const starY = ty + t.h - 24;
     for (let i = 0; i < 3; i++) {
-      ctx.fillStyle = i < stars ? '#ffd166' : '#3a3a4a';
+      ctx.fillStyle = i < stars ? '#ffd166' : '#c8d4e0';
       this.drawStar(ctx, t.x + 16 + i * 18, starY, 7);
     }
 
     if (prog && prog.bestTime !== Infinity) {
-      ctx.fillStyle = '#9aa';
+      ctx.fillStyle = '#7a8a9a';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';

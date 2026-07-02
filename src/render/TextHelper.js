@@ -2,7 +2,7 @@
 const BODY_FONT_FAMILY = '"PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif';
 const BODY_FONT_SIZE = 14;
 const BODY_LINE_HEIGHT = 22;
-const BODY_COLOR = '#d0d0dc';
+const BODY_COLOR = '#5a6a7a';
 
 function applyBodyTextStyle(ctx, fontSize = BODY_FONT_SIZE) {
   ctx.font = `${fontSize}px ${BODY_FONT_FAMILY}`;

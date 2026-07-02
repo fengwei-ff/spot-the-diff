@@ -45,6 +45,14 @@
       {
         "value": "archive_06_diff.jpeg.bak",
         "type": "file"
+      },
+      {
+        "value": "scripts",
+        "type": "folder"
+      },
+      {
+        "value": ".DS_Store",
+        "type": "file"
       }
     ],
     "include": []

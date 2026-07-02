@@ -83,6 +83,40 @@ function detect() {
           fail: reject,
         });
       }),
+      getStorage: (key) => new Promise((resolve, reject) => {
+        wx.getStorage({
+          key,
+          success: (res) => resolve(res.data),
+          fail: (err) => {
+            if (err && err.errMsg && err.errMsg.includes('data not found')) resolve(null);
+            else reject(err);
+          },
+        });
+      }),
+      setStorage: (key, data) => new Promise((resolve, reject) => {
+        wx.setStorage({ key, data, success: resolve, fail: reject });
+      }),
+      createAudio: () => {
+        const audio = wx.createInnerAudioContext();
+        audio.obeyMuteSwitch = false;
+        return {
+          set src(v) { audio.src = v; },
+          get src() { return audio.src; },
+          set loop(v) { audio.loop = v; },
+          set volume(v) { audio.volume = v; },
+          play: () => { audio.play(); },
+          stop: () => { audio.stop(); },
+          seek: (pos) => { audio.seek(pos); },
+          destroy: () => { audio.destroy(); },
+        };
+      },
+      loadSubpackage: (name) => new Promise((resolve, reject) => {
+        wx.loadSubpackage({
+          name,
+          success: resolve,
+          fail: reject,
+        });
+      }),
     };
   }
   // 浏览器降级（用于本地 demo）
@@ -143,6 +177,42 @@ function detect() {
       canvasEl.addEventListener('touchcancel', handler);
     },
     readJSON: (path) => fetch(path).then((r) => r.json()),
+    getStorage: (key) => {
+      try {
+        const v = localStorage.getItem(key);
+        return Promise.resolve(v);
+      } catch (e) {
+        return Promise.resolve(null);
+      }
+    },
+    setStorage: (key, data) => {
+      try {
+        localStorage.setItem(key, data);
+      } catch (e) {
+        // ignore
+      }
+      return Promise.resolve();
+    },
+    createAudio: () => {
+      const audio = new Audio();
+      return {
+        set src(v) { audio.src = v; },
+        get src() { return audio.src; },
+        set loop(v) { audio.loop = v; },
+        set volume(v) { audio.volume = v; },
+        play: () => audio.play(),
+        stop: () => {
+          audio.pause();
+          audio.currentTime = 0;
+        },
+        seek: (pos) => { audio.currentTime = pos; },
+        destroy: () => {
+          audio.pause();
+          audio.src = '';
+        },
+      };
+    },
+    loadSubpackage: () => Promise.resolve(),
   };
 }
 
