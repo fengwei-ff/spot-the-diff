@@ -31,7 +31,10 @@ function roundRectPath(ctx, x, y, w, h, r) {
 }
 
 class LevelScene {
-  constructor({ sceneManager, canvasManager, env, levelConfig, imageA, imageAForB, imageB, onFinish, audio }) {
+  constructor({
+    sceneManager, canvasManager, env, levelConfig, imageA, imageAForB, imageB,
+    onFinish, onContinue, audio, levelIndex = 0, hasNextLevel = false,
+  }) {
     this.sceneManager = sceneManager;
     this.canvasManager = canvasManager;
     this.env = env;
@@ -40,6 +43,8 @@ class LevelScene {
     this.imageAForB = imageAForB;
     this.imageB = imageB;
     this.onFinish = onFinish;
+    this.onContinue = onContinue;
+    this.hasNextLevel = hasNextLevel;
     this.audio = audio || AudioManager.getInstance(env);
     this.toasts = [];
     this.foundAnims = {};
@@ -104,7 +109,13 @@ class LevelScene {
         hintUsed: this.hintUsed,
         reason,
         audio: this.audio,
+        hasNextLevel: this.hasNextLevel,
         onRetry: () => this.restart(),
+        onContinue: (stars) => {
+          if (this.onContinue) {
+            this.onContinue({ result, stars, time, misses, hintUsed: this.hintUsed });
+          }
+        },
         onBack: (stars) => {
           if (this.onFinish) this.onFinish({ result, stars, time, misses, hintUsed: this.hintUsed });
         },
@@ -126,6 +137,8 @@ class LevelScene {
       imageAForB: this.imageAForB,
       imageB: this.imageB,
       onFinish: this.onFinish,
+      onContinue: this.onContinue,
+      hasNextLevel: this.hasNextLevel,
       audio: this.audio,
     }));
   }

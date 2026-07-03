@@ -6,6 +6,8 @@ const LevelScene = require('./LevelScene.js');
 const AudioManager = require('../audio/AudioManager.js');
 const { drawPageBackground, drawHeaderBand } = require('../render/SceneBackground.js');
 const { ensureLevelImages } = require('../core/SubpackageLoader.js');
+const { LEVEL_LOCK_ENABLED } = require('../config/gameConfig.js');
+const ProgressStore = require('../core/ProgressStore.js');
 
 const TILE_PADDING = 12;
 const FOOTER_GAP = 24;
@@ -22,6 +24,8 @@ class ChapterScene {
     this._tapX = null;
     this._tapY = null;
     this.bgPhase = 0;
+    this.toast = null;
+    this.toastUntil = 0;
     this.initLayout();
   }
 
@@ -59,9 +63,13 @@ class ChapterScene {
     return { x: 8, y: this.canvasManager.capsuleCenterY - h / 2, w: 44, h };
   }
 
-  isUnlocked() {
-    // 暂时全部解锁，后续再按进度加锁
-    return true;
+  isUnlocked(index) {
+    if (!LEVEL_LOCK_ENABLED) return true;
+    if (index <= 0) return true;
+    const prev = this.chapter.levels[index - 1];
+    if (!prev) return false;
+    const prog = this.progress[prev.levelId];
+    return !!(prog && prog.stars > 0);
   }
 
   async startLevel(level) {
@@ -102,6 +110,7 @@ class ChapterScene {
       story: level.story,
       debugCoords: !!level.debugCoords,
     };
+    const levelIndex = level.index ?? this.chapter.levels.findIndex((lv) => lv.levelId === level.levelId);
     this.sceneManager.push(new LevelScene({
       sceneManager: this.sceneManager,
       canvasManager: this.canvasManager,
@@ -111,9 +120,20 @@ class ChapterScene {
       imageAForB,
       imageB,
       audio: this.audio,
+      levelIndex,
+      hasNextLevel: levelIndex + 1 < this.chapter.levels.length,
       onFinish: (result) => {
         this.onLevelFinish(level, result);
         while (this.sceneManager.current !== this) this.sceneManager.pop();
+      },
+      onContinue: (result) => {
+        this.onLevelFinish(level, result);
+        while (this.sceneManager.current !== this) this.sceneManager.pop();
+        const nextIndex = levelIndex + 1;
+        if (nextIndex < this.chapter.levels.length) {
+          const next = this.chapter.levels[nextIndex];
+          this.startLevel({ ...next, index: nextIndex });
+        }
       },
     }));
   }
@@ -125,6 +145,9 @@ class ChapterScene {
         stars: Math.max(cur.stars, result.stars),
         bestTime: Math.min(cur.bestTime, result.time || Infinity),
       };
+      ProgressStore.getInstance().save(this.env).catch((e) => {
+        console.warn('[ChapterScene] save progress failed:', e);
+      });
     }
   }
 
@@ -169,7 +192,12 @@ class ChapterScene {
     const localY = y - this.headerH + this.scroll.scrollY;
     for (const t of this.tiles) {
       if (x >= t.x && x <= t.x + t.w && localY >= t.y && localY <= t.y + t.h) {
-        if (!this.isUnlocked(t.index)) return;
+        if (!this.isUnlocked(t.index)) {
+          this.audio.playSfx('tap');
+          this.toast = '请先通关上一关';
+          this.toastUntil = Date.now() + 1200;
+          return;
+        }
         this.audio.playSfx('tap');
         this.startLevel({ ...t.level, index: t.index });
         return;
@@ -225,12 +253,31 @@ class ChapterScene {
       fontSize: this.introFontSize,
       lineHeight: this.introLineH,
     });
+
+    if (this.toast && Date.now() < this.toastUntil) this.drawToast(ctx, this.toast);
+  }
+
+  drawToast(ctx, text) {
+    const { width, height } = this.canvasManager;
+    const w = 180;
+    const h = 44;
+    const x = width / 2 - w / 2;
+    const y = height / 2 - h / 2;
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.strokeStyle = 'rgba(90,170,230,0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#5a6a7a';
+    ctx.font = '15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, width / 2, height / 2);
   }
 
   drawTile(ctx, t, ty) {
     const unlocked = this.isUnlocked(t.index);
     const prog = this.progress[t.level.levelId];
-    const stars = prog ? prog.stars : 0;
 
     ctx.fillStyle = unlocked ? 'rgba(255,255,255,0.94)' : 'rgba(255,255,255,0.55)';
     ctx.fillRect(t.x, ty, t.w, t.h);
@@ -257,32 +304,13 @@ class ChapterScene {
       return;
     }
 
-    const starY = ty + t.h - 24;
-    for (let i = 0; i < 3; i++) {
-      ctx.fillStyle = i < stars ? '#ffd166' : '#c8d4e0';
-      this.drawStar(ctx, t.x + 16 + i * 18, starY, 7);
-    }
-
     if (prog && prog.bestTime !== Infinity) {
       ctx.fillStyle = '#7a8a9a';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`${prog.bestTime.toFixed(1)}s`, t.x + t.w - 12, starY);
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(`${prog.bestTime.toFixed(1)}s`, t.x + t.w - 12, ty + t.h - 10);
     }
-  }
-
-  drawStar(ctx, cx, cy, r) {
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const angle = -Math.PI / 2 + i * Math.PI / 5;
-      const rad = i % 2 === 0 ? r : r / 2.3;
-      const x = cx + Math.cos(angle) * rad;
-      const y = cy + Math.sin(angle) * rad;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
   }
 }
 

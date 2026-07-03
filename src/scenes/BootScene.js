@@ -1,5 +1,6 @@
 const SplashScene = require('./SplashScene.js');
 const { drawPageBackground } = require('../render/SceneBackground.js');
+const ProgressStore = require('../core/ProgressStore.js');
 
 class BootScene {
   constructor({ sceneManager, canvasManager, env }) {
@@ -11,13 +12,15 @@ class BootScene {
     setTimeout(() => this.start(), 60);
   }
 
-  start() {
+  async start() {
     try {
+      const store = ProgressStore.getInstance();
+      const { progress } = await store.init(this.env);
       this.sceneManager.replace(new SplashScene({
         sceneManager: this.sceneManager,
         canvasManager: this.canvasManager,
         env: this.env,
-        progress: {},
+        progress,
       }));
     } catch (e) {
       this.error = (e && e.message) ? e.message : String(e);

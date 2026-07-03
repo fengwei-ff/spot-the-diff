@@ -452,10 +452,10 @@ class HomeScene {
 
     if (ch.available && ch.data) {
       const total = ch.data.levels.length;
-      let cleared = 0; let stars = 0;
+      let cleared = 0;
       for (const lv of ch.data.levels) {
         const p = this.progress[lv.levelId];
-        if (p && p.stars > 0) { cleared++; stars += p.stars; }
+        if (p && p.stars > 0) cleared++;
       }
       const barX = c.x + 24;
       const barY = cy + c.h - 38;
@@ -470,7 +470,7 @@ class HomeScene {
       ctx.fillStyle = '#7a8a9a';
       ctx.font = '12px sans-serif';
       ctx.textBaseline = 'top';
-      ctx.fillText(`${cleared}/${total} 关  ${stars}⭐`, barX, barY + 10);
+      ctx.fillText(`${cleared}/${total} 关`, barX, barY + 10);
     } else {
       ctx.fillStyle = '#b0b8c0';
       ctx.font = '12px sans-serif';
