@@ -307,15 +307,16 @@ class LevelScene {
 
     ctx.fillStyle = '#aab';
     ctx.font = '13px sans-serif';
-    ctx.fillText('观看一段视频，获得 1 次提示机会', box.x + box.w / 2, box.y + 110);
+    // ctx.fillText('观看一段视频，获得 1 次提示机会', box.x + box.w / 2, box.y + 110);
+    ctx.fillText('现阶段只有一次提示机会', box.x + box.w / 2, box.y + 110);
 
     // 观看按钮
-    ctx.fillStyle = '#ffd166';
-    roundRectPath(ctx, watch.x, watch.y, watch.w, watch.h, watch.h / 2);
-    ctx.fill();
-    ctx.fillStyle = '#1a1a2e';
-    ctx.font = 'bold 15px sans-serif';
-    ctx.fillText('观看视频 +1', watch.x + watch.w / 2, watch.y + watch.h / 2);
+    // ctx.fillStyle = '#ffd166';
+    // roundRectPath(ctx, watch.x, watch.y, watch.w, watch.h, watch.h / 2);
+    // ctx.fill();
+    // ctx.fillStyle = '#1a1a2e';
+    // ctx.font = 'bold 15px sans-serif';
+    // ctx.fillText('观看视频 +1', watch.x + watch.w / 2, watch.y + watch.h / 2);
   }
 
   renderHeader(ctx) {
