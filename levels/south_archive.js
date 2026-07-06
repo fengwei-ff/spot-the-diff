@@ -74,7 +74,7 @@ module.exports = {
       imageSize: { w: 900, h: 675 },
       timeLimit: 90,
       maxMisses: 3,
-      debugCoords: true,
+      debugCoords: false,
       diffs: [
         { id: 'd1', x: 113, y: 329, r: 30, hitR: 52, desc: '海侠左胳膊多了一处臂章' },
         { id: 'd2', x: 493, y: 419, r: 30, hitR: 52, desc: '海楼项链吊坠颜色' },
