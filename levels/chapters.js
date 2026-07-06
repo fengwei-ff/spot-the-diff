@@ -4,7 +4,7 @@ const southArchive = require('./south_archive.js');
 module.exports = [
   {
     id: 'south_archive',
-    title: '段家三兄妹',
+    title: '段家三侦探',
     subtitle: '悬疑探案 · 7关',
     palette: ['#fff8f5', '#ffede5'],
     accent: '#ff8c42',
