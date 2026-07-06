@@ -55,7 +55,7 @@ module.exports = {
       imageSize: { w: 900, h: 675 },
       timeLimit: 90,
       maxMisses: 3,
-      debugCoords: true,
+      debugCoords: false,
       diffs: [
         { id: 'd1', x: 156, y: 426, r: 30, hitR: 52, desc: '袋子上的小红花' },
         { id: 'd2', x: 61, y: 112, r: 30, hitR: 52, desc: '干草没了' },
