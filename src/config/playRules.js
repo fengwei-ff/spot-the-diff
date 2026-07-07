@@ -1,6 +1,6 @@
 module.exports = {
   NEAR_MISS_HINT: '再靠近差异中心试试',
-  LOADING_TIP: '大面积差异请点在变化中心',
+  LOADING_TIP: '大面积差异请点差异中心',
   RULES: [
     '对比上下两图，找出所有不同之处',
     '大面积差异时，点击边缘可能判定失误',
