@@ -55,7 +55,7 @@ module.exports = {
       imageSize: { w: 900, h: 675 },
       timeLimit: 90,
       maxMisses: 3,
-      debugCoords: true,
+      debugCoords: false,
       diffs: [
         { id: 'd1', x: 156, y: 426, r: 30, hitR: 52, desc: '袋子上的小红花' },
         { id: 'd2', x: 61, y: 112, r: 30, hitR: 52, desc: '干草没了' },
@@ -80,6 +80,7 @@ module.exports = {
         { id: 'd2', x: 493, y: 419, r: 30, hitR: 52, desc: '海楼项链吊坠颜色' },
         { id: 'd3', x: 728, y: 300, r: 30, hitR: 52, desc: '张海琪耳坠形状' },
         { id: 'd4', x: 709, y: 514, r: 30, hitR: 52, desc: '张海琪手表' },
+        { id: 'd?', x: 565, y: 489, r: 30, hitR: 52, desc: '' }
       ],
       starThresholds: { 3: 40, 2: 70, 1: 100 },
     },
