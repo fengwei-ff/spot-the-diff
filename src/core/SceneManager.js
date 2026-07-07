@@ -26,6 +26,13 @@ class SceneManager {
     if (s && s.onExit) s.onExit();
   }
 
+  /** 替换栈顶场景（不触动下层），用于关卡切换过渡 */
+  replaceTop(scene) {
+    const s = this.stack.pop();
+    if (s && s.onExit) s.onExit();
+    this.push(scene);
+  }
+
   update(dt) {
     if (this.current && this.current.update) this.current.update(dt);
   }

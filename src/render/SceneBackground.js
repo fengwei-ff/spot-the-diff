@@ -50,8 +50,10 @@ function drawSoftBubbles(ctx, width, height, phase = 0) {
 }
 
 function drawNeutralBackground(ctx, width, height) {
-  // 纯色替代每帧 createLinearGradient，视觉差异极小
-  ctx.fillStyle = '#eeeae4';
+  const bg = ctx.createLinearGradient(0, 0, 0, height);
+  bg.addColorStop(0, '#f4f1ec');
+  bg.addColorStop(1, '#e8e4de');
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 }
 

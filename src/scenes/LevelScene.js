@@ -1,6 +1,7 @@
 const LevelEngine = require('../game/LevelEngine.js');
 const DiffPainter = require('../render/DiffPainter.js');
 const ResultScene = require('./ResultScene.js');
+const ScoreEvaluator = require('../game/ScoreEvaluator.js');
 const AudioManager = require('../audio/AudioManager.js');
 const { drawNeutralBackground, drawPlayAreaBackground, drawHeaderBand } = require('../render/SceneBackground.js');
 const { BODY_FONT_SIZE, BODY_LINE_HEIGHT, wrapText, clampLines, drawBodyLines, getLevelSubtitle } = require('../render/TextHelper.js');
@@ -14,6 +15,9 @@ const FOUND_ANIM_MS = 1500;
 const FOUND_PULSES = 3;
 // 激励语（保持 3~5 字），首个固定为「太棒了」
 const PRAISES = ['太棒了', '找到啦', '好眼力', '真厉害', '没跑了', '火眼金睛', '就是这', '又一处'];
+// 中间关通关后自动进下一关的等待时长（留时间播放末个差异动画）
+const AUTO_CONTINUE_DELAY_MS = 1200;
+const FADE_IN_MS = 360;
 
 function roundRectPath(ctx, x, y, w, h, r) {
   const radius = Math.min(r, w / 2, h / 2);
@@ -93,12 +97,16 @@ class LevelScene {
   /** 离屏预合成 A/B 图与边框，避免每帧对大图做两次 drawImage 缩放 */
   _rebuildPlayfieldCache() {
     const { width } = this.canvasManager;
+    const dpr = this.canvasManager.dpr;
     const playY = this.headerH;
     const playH = this.canvasManager.height - this.headerH - this.footerH;
-    const off = this.env.createOffscreenCanvas(width, playH);
-    off.width = width;
-    off.height = playH;
+    const pw = Math.round(width * dpr);
+    const ph = Math.round(playH * dpr);
+    const off = this.env.createOffscreenCanvas(pw, ph);
+    off.width = pw;
+    off.height = ph;
     const ctx = off.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     drawPlayAreaBackground(ctx, 0, 0, width, playH);
 
@@ -142,10 +150,11 @@ class LevelScene {
       DiffPainter.renderBPanel(ctx, this.imageA, relA, relB, imageSize, this.config.diffs);
     }
 
-    this._playfieldCache = { canvas: off, y: playY };
+    this._playfieldCache = { canvas: off, y: playY, w: width, h: playH };
   }
 
   onEnter() {
+    this.enterAt = Date.now();
     this.audio.enterLevel();
   }
 
@@ -153,8 +162,39 @@ class LevelScene {
     this.audio.leaveLevel();
   }
 
+  _evaluateStars(result, time, misses) {
+    if (result !== 'clear') return 0;
+    return ScoreEvaluator.evaluate({
+      elapsedTime: time,
+      missCount: misses,
+      hintUsed: this.hintUsed,
+      thresholds: this.config.starThresholds,
+    });
+  }
+
+  _buildResultPayload(result, time, misses) {
+    return {
+      result,
+      stars: this._evaluateStars(result, time, misses),
+      time,
+      misses,
+      hintUsed: this.hintUsed,
+    };
+  }
+
   finish(result, time, misses, reason) {
+    const autoContinue = result === 'clear' && this.hasNextLevel;
+    const delay = autoContinue ? AUTO_CONTINUE_DELAY_MS : 600;
+
     setTimeout(() => {
+      if (autoContinue) {
+        this.audio.playSfx('clear');
+        if (this.onContinue) {
+          this.onContinue(this._buildResultPayload(result, time, misses));
+        }
+        return;
+      }
+
       this.sceneManager.push(new ResultScene({
         sceneManager: this.sceneManager,
         canvasManager: this.canvasManager,
@@ -177,7 +217,7 @@ class LevelScene {
           if (this.onFinish) this.onFinish({ result, stars, time, misses, hintUsed: this.hintUsed });
         },
       }));
-    }, 600);
+    }, delay);
   }
 
   restart() {
@@ -281,12 +321,23 @@ class LevelScene {
   }
 
   render(ctx) {
+    const fade = Math.min(1, (Date.now() - (this.enterAt || 0)) / FADE_IN_MS);
+    if (fade < 1) {
+      ctx.save();
+      ctx.globalAlpha = fade;
+    }
+    this._renderFrame(ctx);
+    if (fade < 1) ctx.restore();
+  }
+
+  _renderFrame(ctx) {
     const { width, height } = this.canvasManager;
     drawNeutralBackground(ctx, width, height);
 
     this.renderHeader(ctx);
     if (this._playfieldCache) {
-      ctx.drawImage(this._playfieldCache.canvas, 0, this._playfieldCache.y);
+      const { canvas, y, w, h } = this._playfieldCache;
+      ctx.drawImage(canvas, 0, y, w, h);
     } else {
       drawPlayAreaBackground(ctx, 0, this.headerH, width, height - this.headerH - this.footerH);
       this.renderImages(ctx);

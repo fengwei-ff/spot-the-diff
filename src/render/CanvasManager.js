@@ -14,8 +14,9 @@ class CanvasManager {
     this.capsuleCenterY = (this.capsule.top + this.capsule.bottom) / 2;
     // 导航栏标题：相对屏幕水平居中（对齐刘海屏视觉中心）
     this.navTitleCenterX = this.width / 2;
-    // 按设备像素比放大背景缓冲区；上限 MAX_DPR 以控制中档机 CPU
-    this.dpr = Math.min(env.pixelRatio || 1, MAX_DPR);
+    // 按设备像素比放大背景缓冲区
+    const rawDpr = env.pixelRatio || 1;
+    this.dpr = MAX_DPR != null ? Math.min(rawDpr, MAX_DPR) : rawDpr;
     canvas.width = Math.round(this.width * this.dpr);
     canvas.height = Math.round(this.height * this.dpr);
     // 浏览器 demo：保持显示尺寸为逻辑像素（微信主屏 canvas 无 style，跳过）

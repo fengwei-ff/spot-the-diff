@@ -22,7 +22,7 @@ class HomeScene {
     this.toastUntil = 0;
     this.settingsModal = false;
     this.bgPhase = 0;
-    this.bgCache = new BackgroundCache(env, canvasManager.width, canvasManager.height);
+    this.bgCache = new BackgroundCache(env, canvasManager.width, canvasManager.height, canvasManager.dpr);
     this.scroll = new ScrollController();
     this._tapX = null;
     this._tapY = null;
@@ -186,7 +186,7 @@ class HomeScene {
 
   render(ctx) {
     const { width, height } = this.canvasManager;
-    const bg = this.bgCache.get(ctx, width, height, this.bgPhase);
+    const bg = this.bgCache.get(width, height, this.bgPhase, this.canvasManager.dpr);
     ctx.drawImage(bg, 0, 0, width, height);
 
     ctx.save();

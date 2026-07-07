@@ -4,6 +4,7 @@ const DiffPainter = require('../render/DiffPainter.js');
 const ScrollController = require('../core/ScrollController.js');
 const { BODY_FONT_SIZE, BODY_LINE_HEIGHT, wrapText, drawBodyLines, getLevelSubtitle } = require('../render/TextHelper.js');
 const LevelScene = require('./LevelScene.js');
+const LevelLoadingScene = require('./LevelLoadingScene.js');
 const AudioManager = require('../audio/AudioManager.js');
 const { drawHeaderBand } = require('../render/SceneBackground.js');
 const BackgroundCache = require('../render/BackgroundCache.js');
@@ -26,7 +27,7 @@ class ChapterScene {
     this._tapX = null;
     this._tapY = null;
     this.bgPhase = 0;
-    this.bgCache = new BackgroundCache(env, canvasManager.width, canvasManager.height);
+    this.bgCache = new BackgroundCache(env, canvasManager.width, canvasManager.height, canvasManager.dpr);
     this.toast = null;
     this.toastUntil = 0;
     this.initLayout();
@@ -75,7 +76,7 @@ class ChapterScene {
     return !!(prog && prog.stars > 0);
   }
 
-  async startLevel(level) {
+  async _loadLevelAssets(level) {
     try {
       await ensureLevelImages(this.env);
     } catch (e) {
@@ -92,7 +93,6 @@ class ChapterScene {
       if (level.imageB && typeof level.imageB === 'string') {
         imageB = await loader.loadFresh(level.imageB);
       } else if (level.diffs && level.diffs.length > 0) {
-        // 进关前离屏烘焙 B 图，避免 LevelScene 每帧 applyDiffs
         const bBasePath = level.imageBBase || level.imageA;
         const baseForB = await loader.loadFresh(bBasePath);
         imageB = await DiffPainter.paintB(this.env, baseForB, imageSize, level.diffs);
@@ -106,7 +106,14 @@ class ChapterScene {
     if (this.env.toDrawable && imageA && typeof imageA.getContext === 'function') {
       imageA = await this.env.toDrawable(imageA);
     }
-    const levelConfig = {
+    if (this.env.toDrawable && imageB && typeof imageB.getContext === 'function') {
+      imageB = await this.env.toDrawable(imageB);
+    }
+    return { imageA, imageAForB, imageB, imageSize };
+  }
+
+  _buildLevelConfig(level, imageSize) {
+    return {
       levelId: level.levelId,
       title: level.title,
       layout: level.layout || 'vertical',
@@ -118,12 +125,16 @@ class ChapterScene {
       story: level.story,
       debugCoords: !!level.debugCoords,
     };
-    const levelIndex = level.index ?? this.chapter.levels.findIndex((lv) => lv.levelId === level.levelId);
-    this.sceneManager.push(new LevelScene({
+  }
+
+  _createLevelScene(level, levelIndex, assets) {
+    const { imageA, imageAForB, imageB, imageSize } = assets;
+    const levelData = { ...level, index: levelIndex };
+    return new LevelScene({
       sceneManager: this.sceneManager,
       canvasManager: this.canvasManager,
       env: this.env,
-      levelConfig,
+      levelConfig: this._buildLevelConfig(levelData, imageSize),
       imageA,
       imageAForB,
       imageB,
@@ -131,19 +142,67 @@ class ChapterScene {
       levelIndex,
       hasNextLevel: levelIndex + 1 < this.chapter.levels.length,
       onFinish: (result) => {
-        this.onLevelFinish(level, result);
+        this.onLevelFinish(levelData, result);
         while (this.sceneManager.current !== this) this.sceneManager.pop();
       },
       onContinue: (result) => {
-        this.onLevelFinish(level, result);
-        while (this.sceneManager.current !== this) this.sceneManager.pop();
+        this.onLevelFinish(levelData, result);
         const nextIndex = levelIndex + 1;
         if (nextIndex < this.chapter.levels.length) {
-          const next = this.chapter.levels[nextIndex];
-          this.startLevel({ ...next, index: nextIndex });
+          this.transitionToLevel(this.chapter.levels[nextIndex], nextIndex);
         }
       },
-    }));
+    });
+  }
+
+  _pushLevelScene(level, levelIndex, assets) {
+    this.sceneManager.push(this._createLevelScene(level, levelIndex, assets));
+    this._preloadNextLevel(levelIndex + 1);
+  }
+
+  _preloadNextLevel(nextIndex) {
+    if (nextIndex >= this.chapter.levels.length) return;
+    const next = { ...this.chapter.levels[nextIndex], index: nextIndex };
+    this._loadLevelAssets(next).catch((e) => {
+      console.warn('[ChapterScene] preload next level failed:', e);
+    });
+  }
+
+  async transitionToLevel(level, levelIndex) {
+    const loading = new LevelLoadingScene({
+      canvasManager: this.canvasManager,
+      subtitle: getLevelSubtitle(level.title) || '',
+    });
+    this.sceneManager.replaceTop(loading);
+    try {
+      const assets = await this._loadLevelAssets({ ...level, index: levelIndex });
+      this.sceneManager.replaceTop(this._createLevelScene(level, levelIndex, assets));
+      this._preloadNextLevel(levelIndex + 1);
+    } catch (e) {
+      console.warn('[ChapterScene] transitionToLevel failed:', e);
+      while (this.sceneManager.current !== this) this.sceneManager.pop();
+      this.toast = '加载失败，请重试';
+      this.toastUntil = Date.now() + 2000;
+    }
+  }
+
+  async startLevel(level) {
+    const levelIndex = level.index ?? this.chapter.levels.findIndex((lv) => lv.levelId === level.levelId);
+    const loading = new LevelLoadingScene({
+      canvasManager: this.canvasManager,
+      subtitle: getLevelSubtitle(level.title) || '',
+    });
+    this.sceneManager.push(loading);
+    try {
+      const assets = await this._loadLevelAssets({ ...level, index: levelIndex });
+      this.sceneManager.pop();
+      this._pushLevelScene({ ...level, index: levelIndex }, levelIndex, assets);
+    } catch (e) {
+      console.warn('[ChapterScene] startLevel failed:', e);
+      if (this.sceneManager.current === loading) this.sceneManager.pop();
+      this.toast = '加载失败，请重试';
+      this.toastUntil = Date.now() + 2000;
+    }
   }
 
   onLevelFinish(level, result) {
@@ -220,7 +279,7 @@ class ChapterScene {
 
   render(ctx) {
     const { width, height, capsuleCenterY, navTitleCenterX } = this.canvasManager;
-    const bg = this.bgCache.get(ctx, width, height, this.bgPhase);
+    const bg = this.bgCache.get(width, height, this.bgPhase, this.canvasManager.dpr);
     ctx.drawImage(bg, 0, 0, width, height);
 
     // 关卡格（裁剪在内容区内）
