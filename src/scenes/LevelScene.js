@@ -86,6 +86,63 @@ class LevelScene {
       },
     });
     this.engine.start();
+    this._playfieldCache = null;
+    this._rebuildPlayfieldCache();
+  }
+
+  /** 离屏预合成 A/B 图与边框，避免每帧对大图做两次 drawImage 缩放 */
+  _rebuildPlayfieldCache() {
+    const { width } = this.canvasManager;
+    const playY = this.headerH;
+    const playH = this.canvasManager.height - this.headerH - this.footerH;
+    const off = this.env.createOffscreenCanvas(width, playH);
+    off.width = width;
+    off.height = playH;
+    const ctx = off.getContext('2d');
+
+    drawPlayAreaBackground(ctx, 0, 0, width, playH);
+
+    const { aRect, bRect, imageSize } = this.engine.layout;
+    const relA = { x: aRect.x, y: aRect.y - playY, w: aRect.w, h: aRect.h };
+    const relB = { x: bRect.x, y: bRect.y - playY, w: bRect.w, h: bRect.h };
+    const mat = 4;
+
+    const drawFrame = (rect) => {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(rect.x - mat, rect.y - mat, rect.w + mat * 2, rect.h + mat * 2);
+      ctx.strokeStyle = 'rgba(60,50,40,0.12)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rect.x - mat + 0.5, rect.y - mat + 0.5, rect.w + mat * 2 - 1, rect.h + mat * 2 - 1);
+    };
+
+    drawFrame(relA);
+    drawFrame(relB);
+
+    const drawLevelImage = (image, rect) => {
+      if (!image) return;
+      const sw = image.width || rect.w;
+      const sh = image.height || rect.h;
+      ctx.drawImage(image, 0, 0, sw, sh, rect.x, rect.y, rect.w, rect.h);
+    };
+
+    drawLevelImage(this.imageA, relA);
+    if (this.imageB) {
+      drawLevelImage(this.imageB, relB);
+    } else if (this.imageAForB) {
+      ctx.drawImage(this.imageAForB, relB.x, relB.y, relB.w, relB.h);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(relB.x, relB.y, relB.w, relB.h);
+      ctx.clip();
+      ctx.translate(relB.x, relB.y);
+      ctx.scale(relB.w / imageSize.w, relB.h / imageSize.h);
+      DiffPainter.applyDiffs(ctx, this.imageAForB, this.config.diffs);
+      ctx.restore();
+    } else {
+      DiffPainter.renderBPanel(ctx, this.imageA, relA, relB, imageSize, this.config.diffs);
+    }
+
+    this._playfieldCache = { canvas: off, y: playY };
   }
 
   onEnter() {
@@ -228,8 +285,12 @@ class LevelScene {
     drawNeutralBackground(ctx, width, height);
 
     this.renderHeader(ctx);
-    drawPlayAreaBackground(ctx, 0, this.headerH, width, height - this.headerH - this.footerH);
-    this.renderImages(ctx);
+    if (this._playfieldCache) {
+      ctx.drawImage(this._playfieldCache.canvas, 0, this._playfieldCache.y);
+    } else {
+      drawPlayAreaBackground(ctx, 0, this.headerH, width, height - this.headerH - this.footerH);
+      this.renderImages(ctx);
+    }
     this.renderFoundMarks(ctx);
     this.renderDebugOverlay(ctx);
     this.renderHint(ctx);
@@ -598,7 +659,7 @@ class LevelScene {
   }
 
   drawFoundRing(ctx, cx, cy, r, elapsed) {
-    // 呼吸闪烁：动画期内圈做数次明暗+缩放脉动，结束后稳定显示大圈
+    // 呼吸闪烁：用双层描边替代 shadowBlur，减轻 CPU
     let scale = 1;
     let alpha = 1;
     let glow = 0;
@@ -611,8 +672,11 @@ class LevelScene {
     }
     ctx.save();
     if (glow > 0) {
-      ctx.shadowColor = `rgba(74, 222, 128, ${(0.9 * glow).toFixed(2)})`;
-      ctx.shadowBlur = 18 * glow;
+      ctx.strokeStyle = `rgba(74, 222, 128, ${(0.35 * glow).toFixed(2)})`;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * scale + 2, 0, Math.PI * 2);
+      ctx.stroke();
     }
     ctx.strokeStyle = `rgba(74, 222, 128, ${alpha.toFixed(2)})`;
     ctx.lineWidth = 3.5;

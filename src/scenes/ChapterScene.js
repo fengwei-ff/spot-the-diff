@@ -1,10 +1,12 @@
 const ArchivePainter = require('../render/ArchivePainter.js');
 const ImageLoader = require('../render/ImageLoader.js');
+const DiffPainter = require('../render/DiffPainter.js');
 const ScrollController = require('../core/ScrollController.js');
 const { BODY_FONT_SIZE, BODY_LINE_HEIGHT, wrapText, drawBodyLines, getLevelSubtitle } = require('../render/TextHelper.js');
 const LevelScene = require('./LevelScene.js');
 const AudioManager = require('../audio/AudioManager.js');
-const { drawPageBackground, drawHeaderBand } = require('../render/SceneBackground.js');
+const { drawHeaderBand } = require('../render/SceneBackground.js');
+const BackgroundCache = require('../render/BackgroundCache.js');
 const { ensureLevelImages } = require('../core/SubpackageLoader.js');
 const { LEVEL_LOCK_ENABLED } = require('../config/gameConfig.js');
 const ProgressStore = require('../core/ProgressStore.js');
@@ -24,6 +26,7 @@ class ChapterScene {
     this._tapX = null;
     this._tapY = null;
     this.bgPhase = 0;
+    this.bgCache = new BackgroundCache(env, canvasManager.width, canvasManager.height);
     this.toast = null;
     this.toastUntil = 0;
     this.initLayout();
@@ -88,12 +91,17 @@ class ChapterScene {
       imageA = await loader.load(level.imageA);
       if (level.imageB && typeof level.imageB === 'string') {
         imageB = await loader.loadFresh(level.imageB);
-      } else if (this.env.isWx && level.diffs && level.diffs.length > 0) {
+      } else if (level.diffs && level.diffs.length > 0) {
+        // 进关前离屏烘焙 B 图，避免 LevelScene 每帧 applyDiffs
         const bBasePath = level.imageBBase || level.imageA;
-        imageAForB = await loader.loadFresh(bBasePath);
+        const baseForB = await loader.loadFresh(bBasePath);
+        imageB = await DiffPainter.paintB(this.env, baseForB, imageSize, level.diffs);
       }
     } else {
       imageA = ArchivePainter.paint(this.env, level.painterId, imageSize, level.index || 1);
+      if (level.diffs && level.diffs.length > 0) {
+        imageB = await DiffPainter.paintB(this.env, imageA, imageSize, level.diffs);
+      }
     }
     if (this.env.toDrawable && imageA && typeof imageA.getContext === 'function') {
       imageA = await this.env.toDrawable(imageA);
@@ -212,7 +220,8 @@ class ChapterScene {
 
   render(ctx) {
     const { width, height, capsuleCenterY, navTitleCenterX } = this.canvasManager;
-    drawPageBackground(ctx, width, height, { phase: this.bgPhase });
+    const bg = this.bgCache.get(ctx, width, height, this.bgPhase);
+    ctx.drawImage(bg, 0, 0, width, height);
 
     // 关卡格（裁剪在内容区内）
     ctx.save();

@@ -2,7 +2,8 @@ const chapters = require('../../levels/chapters.js');
 const ScrollController = require('../core/ScrollController.js');
 const ChapterScene = require('./ChapterScene.js');
 const AudioManager = require('../audio/AudioManager.js');
-const { drawPageBackground, drawHeaderBand } = require('../render/SceneBackground.js');
+const BackgroundCache = require('../render/BackgroundCache.js');
+const { drawHeaderBand } = require('../render/SceneBackground.js');
 
 const PADDING = 16;
 const FOOTER_GAP = 24;
@@ -21,6 +22,7 @@ class HomeScene {
     this.toastUntil = 0;
     this.settingsModal = false;
     this.bgPhase = 0;
+    this.bgCache = new BackgroundCache(env, canvasManager.width, canvasManager.height);
     this.scroll = new ScrollController();
     this._tapX = null;
     this._tapY = null;
@@ -184,7 +186,8 @@ class HomeScene {
 
   render(ctx) {
     const { width, height } = this.canvasManager;
-    drawPageBackground(ctx, width, height, { phase: this.bgPhase });
+    const bg = this.bgCache.get(ctx, width, height, this.bgPhase);
+    ctx.drawImage(bg, 0, 0, width, height);
 
     ctx.save();
     ctx.beginPath();

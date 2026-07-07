@@ -1,3 +1,5 @@
+const { MAX_DPR } = require('../config/gameConfig.js');
+
 class CanvasManager {
   constructor(canvas, ctx, env) {
     this.canvas = canvas;
@@ -12,8 +14,8 @@ class CanvasManager {
     this.capsuleCenterY = (this.capsule.top + this.capsule.bottom) / 2;
     // 导航栏标题：相对屏幕水平居中（对齐刘海屏视觉中心）
     this.navTitleCenterX = this.width / 2;
-    // 按设备像素比放大背景缓冲区，避免高清图在高 DPI 屏上被放大显示而发虚
-    this.dpr = env.pixelRatio || 1;
+    // 按设备像素比放大背景缓冲区；上限 MAX_DPR 以控制中档机 CPU
+    this.dpr = Math.min(env.pixelRatio || 1, MAX_DPR);
     canvas.width = Math.round(this.width * this.dpr);
     canvas.height = Math.round(this.height * this.dpr);
     // 浏览器 demo：保持显示尺寸为逻辑像素（微信主屏 canvas 无 style，跳过）
