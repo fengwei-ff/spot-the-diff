@@ -75,7 +75,15 @@ class LevelEngine {
     } else {
       this.misses += 1;
       this.lastMissAt = this.elapsed;
-      if (this.hooks.onMiss) this.hooks.onMiss({ x, y, misses: this.misses });
+      const nearest = this.hitTester.nearestUnfoundDiff(
+        localX, localY, this.config.diffs, this.found,
+      );
+      const nearMiss = nearest
+        && nearest.distance > nearest.hitR
+        && nearest.distance <= nearest.hitR * 1.5;
+      if (this.hooks.onMiss) {
+        this.hooks.onMiss({ x, y, misses: this.misses, nearMiss: !!nearMiss });
+      }
       // 红心为剩余可错次数，扣到 0 即游戏结束
       if (this.misses >= this.allowedMisses) this.fail('misses');
     }

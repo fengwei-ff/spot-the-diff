@@ -7,6 +7,8 @@ module.exports = {
   MAX_DPR: null,
   // 首页/章节页背景动画降频：每 N 帧才重绘一次渐变背景
   BG_ANIM_INTERVAL: 3,
+  // 进入关卡时的淡入时长（毫秒）
+  LEVEL_FADE_IN_MS: 600,
 
   // 关卡是否debug模式
   debugCoords: false,

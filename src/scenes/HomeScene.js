@@ -4,10 +4,14 @@ const ChapterScene = require('./ChapterScene.js');
 const AudioManager = require('../audio/AudioManager.js');
 const BackgroundCache = require('../render/BackgroundCache.js');
 const { drawHeaderBand } = require('../render/SceneBackground.js');
+const { RULES } = require('../config/playRules.js');
+const { wrapText } = require('../render/TextHelper.js');
 
 const PADDING = 16;
 const FOOTER_GAP = 24;
 const SETTINGS_BTN_SIZE = 32;
+const RULES_BTN_W = SETTINGS_BTN_SIZE;
+const HEADER_BTN_GAP = 8;
 const CAPSULE_BOTTOM_GAP = 14;
 
 class HomeScene {
@@ -21,6 +25,8 @@ class HomeScene {
     this.toast = null;
     this.toastUntil = 0;
     this.settingsModal = false;
+    this.rulesModal = false;
+    this.rulesLayout = null;
     this.bgPhase = 0;
     this.bgCache = new BackgroundCache(env, canvasManager.width, canvasManager.height, canvasManager.dpr);
     this.scroll = new ScrollController();
@@ -61,6 +67,16 @@ class HomeScene {
     };
   }
 
+  rulesBtnRect() {
+    const settings = this.settingsBtnRect();
+    return {
+      x: settings.x - HEADER_BTN_GAP - RULES_BTN_W,
+      y: settings.y,
+      w: RULES_BTN_W,
+      h: settings.h,
+    };
+  }
+
   settingsModalRects() {
     const { width, height } = this.canvasManager;
     const boxW = Math.min(300, width - 48);
@@ -98,6 +114,61 @@ class HomeScene {
     return { box, rows, close };
   }
 
+  rulesModalRects() {
+    if (this.rulesLayout) return this.rulesLayout;
+    const { width, height } = this.canvasManager;
+    const ctx = this.canvasManager.ctx;
+    return this._buildRulesLayout(ctx, width, height);
+  }
+
+  _buildRulesLayout(ctx, width, height) {
+    const boxW = Math.min(320, width - 40);
+    const padX = 20;
+    const padTop = 52;
+    const padBottom = 24;
+    const contentW = boxW - padX * 2;
+    const fontSize = 13;
+    const lineH = 20;
+    const itemGap = 6;
+
+    ctx.font = `${fontSize}px sans-serif`;
+    const blocks = RULES.map((rule, i) => wrapText(ctx, `${i + 1}. ${rule}`, contentW, fontSize));
+
+    let contentH = 0;
+    blocks.forEach((lines, i) => {
+      contentH += lines.length * lineH;
+      if (i < blocks.length - 1) contentH += itemGap;
+    });
+
+    const boxH = Math.min(padTop + contentH + padBottom, height - 48);
+    const box = {
+      x: (width - boxW) / 2,
+      y: (height - boxH) / 2,
+      w: boxW,
+      h: boxH,
+    };
+    const close = {
+      x: box.x + box.w - 36,
+      y: box.y + 10,
+      w: 26,
+      h: 26,
+    };
+    const layout = {
+      box,
+      close,
+      blocks,
+      lineH,
+      itemGap,
+      fontSize,
+      padX,
+      padTop,
+      padBottom,
+      contentH: boxH - padTop - padBottom,
+    };
+    this.rulesLayout = layout;
+    return layout;
+  }
+
   hit(rect, x, y) {
     return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
   }
@@ -105,7 +176,7 @@ class HomeScene {
   onTouchStart({ x, y }) {
     this._tapX = x;
     this._tapY = y;
-    if (this.settingsModal) return;
+    if (this.settingsModal || this.rulesModal) return;
     if (y < this.headerH) return;
     this.scroll.onTouchStart(y);
   }
@@ -122,8 +193,16 @@ class HomeScene {
     const y = this._tapY;
     if (x == null || y == null) return;
 
-    if (this.settingsModal) {
-      this.handleSettingsTouch(x, y);
+    if (this.settingsModal || this.rulesModal) {
+      if (this.rulesModal) this.handleRulesTouch(x, y);
+      else this.handleSettingsTouch(x, y);
+      return;
+    }
+
+    if (this.hit(this.rulesBtnRect(), x, y)) {
+      this.audio.playSfx('tap');
+      this.rulesLayout = null;
+      this.rulesModal = true;
       return;
     }
 
@@ -179,6 +258,20 @@ class HomeScene {
     }
   }
 
+  handleRulesTouch(x, y) {
+    const { box, close } = this.rulesModalRects();
+    if (this.hit(close, x, y)) {
+      this.audio.playSfx('tap');
+      this.rulesModal = false;
+      this.rulesLayout = null;
+      return;
+    }
+    if (!this.hit(box, x, y)) {
+      this.rulesModal = false;
+      this.rulesLayout = null;
+    }
+  }
+
   update(dt) {
     this.bgPhase += dt * 0.004;
     this.scroll.update(dt);
@@ -211,10 +304,51 @@ class HomeScene {
     ctx.textBaseline = 'bottom';
     ctx.fillText('选择今晚要打开的剧本', PADDING, this.subtitleY);
 
+    this.drawRulesBtn(ctx);
     this.drawSettingsBtn(ctx);
 
     if (this.settingsModal) this.renderSettingsModal(ctx);
+    if (this.rulesModal) this.renderRulesModal(ctx);
     if (this.toast && Date.now() < this.toastUntil) this.drawToast(ctx, this.toast);
+  }
+
+  drawDocIcon(ctx, cx, cy) {
+    const w = 10;
+    const h = 12;
+    const left = cx - w / 2;
+    const top = cy - h / 2;
+    ctx.strokeStyle = '#4ecdc4';
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeRect(left, top, w, h);
+    ctx.beginPath();
+    ctx.moveTo(left + w - 3.5, top);
+    ctx.lineTo(left + w - 3.5, top + 3.5);
+    ctx.lineTo(left + w, top + 3.5);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      const ly = top + 4.5 + i * 2.8;
+      ctx.beginPath();
+      ctx.moveTo(left + 2, ly);
+      ctx.lineTo(left + w - 2 - (i === 0 ? 2 : 0), ly);
+      ctx.stroke();
+    }
+  }
+
+  drawRulesBtn(ctx) {
+    const btn = this.rulesBtnRect();
+    ctx.save();
+    this.roundRectPath(ctx, btn.x, btn.y, btn.w, btn.h, 8);
+    ctx.fillStyle = 'rgba(78, 205, 196, 0.12)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(78, 205, 196, 0.45)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    this.drawDocIcon(ctx, btn.x + btn.w / 2, btn.y + btn.h / 2);
+    ctx.restore();
   }
 
   drawSettingsBtn(ctx) {
@@ -289,6 +423,58 @@ class HomeScene {
           : this.audio.fxEnabled;
       this.drawToggle(ctx, row.toggle, on);
     }
+  }
+
+  renderRulesModal(ctx) {
+    const { width, height } = this.canvasManager;
+    const layout = this._buildRulesLayout(ctx, width, height);
+    const {
+      box, close, blocks, lineH, itemGap, fontSize, padX, padTop, contentH,
+    } = layout;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(0, 0, width, height);
+
+    this.roundRectPath(ctx, box.x, box.y, box.w, box.h, 12);
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(78, 205, 196, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = '#e6d8a8';
+    ctx.font = 'bold 17px serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('玩法说明', box.x + padX, box.y + 28);
+
+    ctx.strokeStyle = '#9aa';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(close.x + 6, close.y + 6);
+    ctx.lineTo(close.x + close.w - 6, close.y + close.h - 6);
+    ctx.moveTo(close.x + close.w - 6, close.y + 6);
+    ctx.lineTo(close.x + 6, close.y + close.h - 6);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(box.x + padX, box.y + padTop, box.w - padX * 2, contentH);
+    ctx.clip();
+
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#b8c8d8';
+    let y = box.y + padTop;
+    blocks.forEach((lines, i) => {
+      for (const line of lines) {
+        ctx.fillText(line, box.x + padX, y);
+        y += lineH;
+      }
+      if (i < blocks.length - 1) y += itemGap;
+    });
+    ctx.restore();
   }
 
   drawToggle(ctx, rect, on) {

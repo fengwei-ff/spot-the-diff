@@ -1,4 +1,5 @@
 const { drawNeutralBackground } = require('../render/SceneBackground.js');
+const { LOADING_TIP } = require('../config/playRules.js');
 
 class LevelLoadingScene {
   constructor({ canvasManager, subtitle = '' }) {
@@ -44,6 +45,10 @@ class LevelLoadingScene {
       ctx.font = 'bold 14px sans-serif';
       ctx.fillText(this.subtitle, cx, cy + 50);
     }
+
+    ctx.fillStyle = '#8a9aaa';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(LOADING_TIP, cx, cy + (this.subtitle ? 78 : 54));
   }
 }
 

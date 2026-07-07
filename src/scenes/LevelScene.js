@@ -1,3 +1,6 @@
+const { LEVEL_FADE_IN_MS } = require('../config/gameConfig.js');
+const { NEAR_MISS_HINT } = require('../config/playRules.js');
+const ProgressStore = require('../core/ProgressStore.js');
 const LevelEngine = require('../game/LevelEngine.js');
 const DiffPainter = require('../render/DiffPainter.js');
 const ResultScene = require('./ResultScene.js');
@@ -17,7 +20,6 @@ const FOUND_PULSES = 3;
 const PRAISES = ['太棒了', '找到啦', '好眼力', '真厉害', '没跑了', '火眼金睛', '就是这', '又一处'];
 // 中间关通关后自动进下一关的等待时长（留时间播放末个差异动画）
 const AUTO_CONTINUE_DELAY_MS = 1200;
-const FADE_IN_MS = 360;
 
 function roundRectPath(ctx, x, y, w, h, r) {
   const radius = Math.min(r, w / 2, h / 2);
@@ -49,6 +51,9 @@ class LevelScene {
     this.onFinish = onFinish;
     this.onContinue = onContinue;
     this.hasNextLevel = hasNextLevel;
+    this.levelIndex = levelIndex;
+    this.showCoachBanner = false;
+    this.bannerToast = null;
     this.audio = audio || AudioManager.getInstance(env);
     this.toasts = [];
     this.foundAnims = {};
@@ -83,7 +88,7 @@ class LevelScene {
       viewport,
       hooks: {
         onDiffFound: (d) => this.flashFound(d),
-        onMiss: ({ x, y }) => this.flashMiss(x, y),
+        onMiss: ({ x, y, nearMiss }) => this.flashMiss(x, y, nearMiss),
         onClear: ({ time, misses }) => this.finish('clear', time, misses),
         onFail: ({ reason, time, misses }) => this.finish('fail', time, misses, reason),
         onHint: (d) => this.showHint(d),
@@ -156,6 +161,21 @@ class LevelScene {
   onEnter() {
     this.enterAt = Date.now();
     this.audio.enterLevel();
+    if (this.levelIndex === 0) {
+      ProgressStore.getInstance().isTutorialSeen(this.env).then((seen) => {
+        if (!seen) this.showCoachBanner = true;
+      }).catch(() => { });
+    }
+  }
+
+  async _dismissCoachBanner() {
+    if (!this.showCoachBanner) return;
+    this.showCoachBanner = false;
+    try {
+      await ProgressStore.getInstance().setTutorialSeen(this.env);
+    } catch (e) {
+      // ignore
+    }
   }
 
   onExit() {
@@ -236,6 +256,7 @@ class LevelScene {
       onFinish: this.onFinish,
       onContinue: this.onContinue,
       hasNextLevel: this.hasNextLevel,
+      levelIndex: this.levelIndex,
       audio: this.audio,
     }));
   }
@@ -251,10 +272,13 @@ class LevelScene {
     this.foundAnims[d.id] = { at: Date.now(), praise };
   }
 
-  flashMiss(x, y) {
+  flashMiss(x, y, nearMiss = false) {
     this.audio.playSfx('miss');
-    if (!this.audio.fxEnabled) return;
     const now = Date.now();
+    if (nearMiss) {
+      this.bannerToast = { text: NEAR_MISS_HINT, until: now + 1800 };
+    }
+    if (!this.audio.fxEnabled) return;
     this.toasts.push({ x, y, at: now, until: now + 700, type: 'miss' });
   }
 
@@ -269,9 +293,11 @@ class LevelScene {
     this.toasts = this.toasts.filter((t) => t.until > now);
     this.debugTaps = this.debugTaps.filter((t) => t.until > now);
     if (this.coordToast && this.coordToast.until <= now) this.coordToast = null;
+    if (this.bannerToast && this.bannerToast.until <= now) this.bannerToast = null;
   }
 
   onTouch({ x, y }) {
+    if (this.showCoachBanner) this._dismissCoachBanner();
     const { capsule } = this.canvasManager;
     // 广告弹窗打开时，优先处理弹窗交互
     if (this.adModal) {
@@ -321,7 +347,7 @@ class LevelScene {
   }
 
   render(ctx) {
-    const fade = Math.min(1, (Date.now() - (this.enterAt || 0)) / FADE_IN_MS);
+    const fade = Math.min(1, (Date.now() - (this.enterAt || 0)) / LEVEL_FADE_IN_MS);
     if (fade < 1) {
       ctx.save();
       ctx.globalAlpha = fade;
@@ -346,6 +372,7 @@ class LevelScene {
     this.renderDebugOverlay(ctx);
     this.renderHint(ctx);
     this.renderToasts(ctx);
+    this.renderBannerToast(ctx);
     this.renderFooter(ctx);
     if (this.adModal) this.renderAdModal(ctx);
   }
@@ -789,6 +816,46 @@ class LevelScene {
     const by = bRect.y + d.y * (bRect.h / imageSize.h);
     ctx.beginPath(); ctx.arc(ax, ay, r, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  renderBannerToast(ctx) {
+    if (!this.bannerToast) return;
+    const { width, height } = this.canvasManager;
+    const text = this.bannerToast.text;
+    ctx.font = '14px sans-serif';
+    const tw = ctx.measureText(text).width + 28;
+    const th = 36;
+    const tx = width / 2 - tw / 2;
+    const ty = height - this.footerH - th - 10;
+
+    ctx.fillStyle = 'rgba(20, 38, 26, 0.88)';
+    roundRectPath(ctx, tx, ty, tw, th, 18);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(74, 222, 128, 0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#a7f3c8';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, width / 2, ty + th / 2);
+  }
+
+  _wrapCoachLines(ctx, text, maxWidth) {
+    const chars = [...text];
+    const lines = [];
+    let line = '';
+    for (const ch of chars) {
+      const next = line + ch;
+      if (ctx.measureText(next).width > maxWidth && line) {
+        lines.push(line);
+        line = ch;
+      } else {
+        line = next;
+      }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : [text];
   }
 
   renderToasts(ctx) {

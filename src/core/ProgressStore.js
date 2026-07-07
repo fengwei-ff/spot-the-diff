@@ -1,5 +1,6 @@
 const USER_ID_KEY = 'spot_diff_user_id';
 const PROGRESS_KEY = 'spot_diff_progress';
+const TUTORIAL_KEY = 'spot_diff_tutorial_seen';
 
 function createUserId() {
   const rand = Math.random().toString(36).slice(2, 10);
@@ -87,6 +88,23 @@ class ProgressStore {
       bestTime: Math.min(cur.bestTime, time ?? Infinity),
     };
     await this.save(env);
+  }
+
+  async isTutorialSeen(env) {
+    try {
+      const v = await env.getStorage(TUTORIAL_KEY);
+      return v === true || v === '1' || v === 1;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async setTutorialSeen(env) {
+    try {
+      await env.setStorage(TUTORIAL_KEY, '1');
+    } catch (e) {
+      console.warn('[ProgressStore] setTutorialSeen failed:', e);
+    }
   }
 }
 

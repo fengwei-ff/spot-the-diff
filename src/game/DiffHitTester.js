@@ -34,6 +34,22 @@ class DiffHitTester {
     }
     return null;
   }
+
+  /** 距点击位置最近的未找到差异（用于近距 miss 提示） */
+  nearestUnfoundDiff(localX, localY, diffs, foundIds) {
+    let nearest = null;
+    for (const d of diffs) {
+      if (foundIds.has(d.id)) continue;
+      const hitR = d.hitR ?? d.r;
+      const dx = localX - d.x;
+      const dy = localY - d.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (!nearest || distance < nearest.distance) {
+        nearest = { diff: d, distance, hitR };
+      }
+    }
+    return nearest;
+  }
 }
 
 module.exports = DiffHitTester;

@@ -13,6 +13,8 @@ const HEALTH_LINES = [
 ];
 const MIN_ADVISORY_MS = 3000;
 const BRAND_MS = 800;
+const SUBPACKAGE_WEIGHT = 0.15;
+const IMAGES_WEIGHT = 0.85;
 
 class SplashScene {
   constructor({ sceneManager, canvasManager, env, progress = {} }) {
@@ -22,7 +24,9 @@ class SplashScene {
     this.progress = progress;
     this.startedAt = Date.now();
     this.loadProgress = 0;
+    this.displayProgress = 0;
     this.loadDone = false;
+    this.loadLabel = '准备加载…';
     this.enterReady = false;
     this.pulse = 0;
     this.audio = AudioManager.getInstance(env);
@@ -34,41 +38,56 @@ class SplashScene {
     const urls = new Set();
     for (const ch of chapters) {
       if (!ch.available || !ch.data || !ch.data.levels) continue;
-      const first = ch.data.levels[0];
-      if (first.imageA) urls.add(first.imageA);
-      if (first.imageB) urls.add(first.imageB);
+      for (const lv of ch.data.levels) {
+        if (lv.imageA) urls.add(lv.imageA);
+        if (lv.imageB) urls.add(lv.imageB);
+      }
     }
     return [...urls];
   }
 
+  _setProgress(value, label) {
+    this.loadProgress = Math.min(1, Math.max(0, value));
+    if (label) this.loadLabel = label;
+  }
+
   async _preload() {
+    this._setProgress(0.02, '准备加载…');
+
     try {
+      this._setProgress(0.05, '加载资源包…');
       await ensureLevelImages(this.env);
+      this._setProgress(SUBPACKAGE_WEIGHT, '资源包就绪');
     } catch (e) {
       console.warn('[SplashScene] 关卡图片分包加载失败:', e);
+      this._setProgress(SUBPACKAGE_WEIGHT, '加载资源包…');
     }
 
     const urls = this.collectPreloadUrls();
     if (!urls.length) {
-      this.loadProgress = 1;
+      this._setProgress(1, '资源加载完成');
       this.loadDone = true;
       this._checkEnterReady();
       return;
     }
+
     const loader = new ImageLoader(this.env);
     let done = 0;
-    await Promise.all(urls.map(async (url) => {
+    for (const url of urls) {
       try {
         await loader.load(url);
       } catch (e) {
         console.warn('[SplashScene] preload failed:', url, e);
       } finally {
         done += 1;
-        this.loadProgress = done / urls.length;
-        this._checkEnterReady();
+        const ratio = done / urls.length;
+        this._setProgress(
+          SUBPACKAGE_WEIGHT + IMAGES_WEIGHT * ratio,
+          `加载图片 ${done}/${urls.length}`,
+        );
       }
-    }));
-    this.loadProgress = 1;
+    }
+    this._setProgress(1, '资源加载完成');
     this.loadDone = true;
     this._checkEnterReady();
   }
@@ -80,6 +99,13 @@ class SplashScene {
 
   update(dt) {
     this.pulse += dt * 0.004;
+    const target = this.loadProgress;
+    const gap = target - this.displayProgress;
+    if (gap > 0) {
+      // 缓动逼近真实进度，避免一帧跳满；慢加载时也能跟上
+      const step = Math.max(gap * 0.12, 0.004);
+      this.displayProgress = Math.min(target, this.displayProgress + step * (dt / 16));
+    }
     this._checkEnterReady();
   }
 
@@ -123,6 +149,12 @@ class SplashScene {
     ctx.shadowColor = 'transparent';
     ctx.restore();
 
+    // 品牌阶段也显示加载进度
+    if (!showAdvisory) {
+      this._drawLoadBar(ctx, width / 2, height * 0.38, width - 80, 8);
+      return;
+    }
+
     if (showAdvisory) {
       const boxW = width - 48;
       const boxX = 24;
@@ -153,21 +185,7 @@ class SplashScene {
       });
 
       // 加载进度
-      const barW = boxW - 40;
-      const barX = boxX + 20;
-      const barY = boxY + boxH + 28;
-      const barH = 8;
-      this._roundRect(ctx, barX, barY, barW, barH, 4);
-      ctx.fillStyle = 'rgba(90,170,230,0.2)';
-      ctx.fill();
-      this._roundRect(ctx, barX, barY, barW * this.loadProgress, barH, 4);
-      ctx.fillStyle = '#4ecdc4';
-      ctx.fill();
-
-      ctx.fillStyle = '#7a8a9a';
-      ctx.font = '12px sans-serif';
-      const pct = Math.round(this.loadProgress * 100);
-      ctx.fillText(this.loadDone ? '资源加载完成' : `加载中 ${pct}%`, width / 2, barY + 22);
+      this._drawLoadBar(ctx, width / 2, boxY + boxH + 36, boxW - 40, 8);
 
       if (this.enterReady) {
         const alpha = 0.65 + 0.35 * (0.5 + 0.5 * Math.sin(this.pulse * 6));
@@ -182,11 +200,30 @@ class SplashScene {
         ctx.font = '13px sans-serif';
         ctx.fillText('请稍候…', width / 2, height * 0.82);
       }
-    } else {
-      ctx.fillStyle = '#7a9ab0';
-      ctx.font = '14px sans-serif';
-      ctx.fillText('加载中…', width / 2, height * 0.38);
     }
+  }
+
+  _drawLoadBar(ctx, centerX, barY, barW, barH) {
+    const barX = centerX - barW / 2;
+    const progress = this.displayProgress;
+    this._roundRect(ctx, barX, barY, barW, barH, 4);
+    ctx.fillStyle = 'rgba(90,170,230,0.2)';
+    ctx.fill();
+    if (progress > 0) {
+      this._roundRect(ctx, barX, barY, Math.max(barH, barW * progress), barH, 4);
+      ctx.fillStyle = '#4ecdc4';
+      ctx.fill();
+    }
+
+    ctx.fillStyle = '#7a8a9a';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const pct = Math.round(progress * 100);
+    const text = this.loadDone && progress >= 0.99
+      ? '资源加载完成'
+      : `${this.loadLabel} ${pct}%`;
+    ctx.fillText(text, centerX, barY + barH + 10);
   }
 
   _drawBackground(ctx, width, height) {
